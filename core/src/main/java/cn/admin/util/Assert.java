@@ -6,6 +6,40 @@ import java.util.function.Supplier;
 
 public abstract class Assert {
 
+    public static void state(boolean expression, String message) {
+        if (!expression) {
+            throw new IllegalStateException(message);
+        }
+    }
+
+    public static void state(boolean expression, Supplier<String> messageSupplier) {
+        if (!expression) {
+            throw new IllegalStateException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    @Deprecated
+    public static void state(boolean expression) {
+        state(expression, "[Assertion failed] - this state invariant must be true");
+    }
+
+    public static void isTrue(boolean expression, String message) {
+        if (!expression) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    public static void isTrue(boolean expression, Supplier<String> messageSupplier) {
+        if (!expression) {
+            throw new IllegalArgumentException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    @Deprecated
+    public static void isTrue(boolean expression) {
+        isTrue(expression, "[Assertion failed] - this expression must be true");
+    }
+
     public static void notNull(@Nullable Object object,String message) {
         if (object == null) {
             throw new IllegalArgumentException(message);

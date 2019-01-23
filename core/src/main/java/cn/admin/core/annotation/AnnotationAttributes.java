@@ -89,7 +89,7 @@ public class AnnotationAttributes extends LinkedHashMap<String,Object> {
     }
 
     @SuppressWarnings("unchecked")
-    public <N extends Number> N getNumer(String attributeName) {
+    public <N extends Number> N getNumber(String attributeName) {
         return (N) getRequiredAttribute(attributeName,Number.class);
     }
 

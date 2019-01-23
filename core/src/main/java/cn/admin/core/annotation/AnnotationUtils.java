@@ -87,6 +87,42 @@ public abstract class AnnotationUtils {
         return (method != null && method.getParameterCount() == 0 && method.getReturnType() != void.class);
     }
 
+    @Nullable
+    public static Object getDefaultValue(Annotation annotation) {
+        return getDefaultValue(annotation,VALUE);
+    }
+
+    @Nullable
+    public static Object getDefaultValue(@Nullable Annotation annotation,
+                                         @Nullable String attributeName) {
+        if (annotation == null) {
+            return null;
+        }
+        return getDefaultValue(annotation.annotationType(),attributeName);
+    }
+
+    @Nullable
+    public static Object getDefaultValue(Class<? extends Annotation> annotationType) {
+        return getDefaultValue(annotationType,VALUE);
+    }
+
+    @Nullable
+    public static Object getDefaultValue(@Nullable Class<? extends Annotation> annotationType,
+                                         @Nullable String attributeName) {
+        if (annotationType == null || !StringUtils.hasText(attributeName)) {
+            return null;
+        }
+        try {
+            return annotationType.getDeclaredMethod(attributeName).getDefaultValue();
+        } catch (Throwable ex) {
+            handleIntrospectionFailure(annotationType,ex);
+            return null;
+        }
+    }
+
+    static void handleIntrospectionFailure(@Nullable AnnotatedElement element,Throwable ex) {
+        //TODO
+    }
 
     private static final class AnnotationCacheKey implements Comparable<AnnotationCacheKey> {
 

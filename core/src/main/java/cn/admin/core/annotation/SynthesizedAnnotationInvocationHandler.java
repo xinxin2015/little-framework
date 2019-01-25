@@ -3,10 +3,13 @@ package cn.admin.core.annotation;
 import cn.admin.util.Assert;
 import cn.admin.util.ObjectUtils;
 import cn.admin.util.ReflectionUtils;
+import cn.admin.util.StringUtils;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,7 +26,20 @@ public class SynthesizedAnnotationInvocationHandler implements InvocationHandler
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        return null;
+        if (ReflectionUtils.isEqualsMethod(method)) {
+            return annotationEquals(args[0]);
+        }
+        if (ReflectionUtils.isHashCodeMethod(method)) {
+            return annotationHashCode();
+        }
+        if (AnnotationUtils.isAnnotationTypeMethod(method)) {
+            return annotationType();
+        }
+        if (!AnnotationUtils.isAttributeMethod(method)) {
+            throw new AnnotationConfigurationException(String.format(
+                    "Method [%s] is unsupported for synthesized annotation type [%s]", method, annotationType()));
+        }
+        return getAttributeValue(method);
     }
 
     private Class<? extends Annotation> annotationType() {
@@ -42,10 +58,19 @@ public class SynthesizedAnnotationInvocationHandler implements InvocationHandler
             }
 
             if (value instanceof Annotation) {
-                //TODO
+                value = AnnotationUtils.synthesizeAnnotation((Annotation)value,
+                        this.attributeExtractor.getAnnotatedElement());
+            } else if (value instanceof Annotation[]) {
+                value = AnnotationUtils.synthesizeAnnotationArray((Annotation[]) value,
+                        this.attributeExtractor.getAnnotatedElement());
             }
+            this.valueCache.put(attributeName,value);
         }
-        return null;
+
+        if (value.getClass().isArray()) {
+            value = cloneArray(value);
+        }
+        return value;
     }
 
     private Object cloneArray(Object array) {
@@ -78,6 +103,36 @@ public class SynthesizedAnnotationInvocationHandler implements InvocationHandler
         return ((Object[]) array).clone();
     }
 
+    private int hashCodeForArray(Object array) {
+        if (array instanceof boolean[]) {
+            return Arrays.hashCode((boolean[]) array);
+        }
+        if (array instanceof byte[]) {
+            return Arrays.hashCode((byte[]) array);
+        }
+        if (array instanceof char[]) {
+            return Arrays.hashCode((char[]) array);
+        }
+        if (array instanceof double[]) {
+            return Arrays.hashCode((double[]) array);
+        }
+        if (array instanceof float[]) {
+            return Arrays.hashCode((float[]) array);
+        }
+        if (array instanceof int[]) {
+            return Arrays.hashCode((int[]) array);
+        }
+        if (array instanceof long[]) {
+            return Arrays.hashCode((long[]) array);
+        }
+        if (array instanceof short[]) {
+            return Arrays.hashCode((short[]) array);
+        }
+
+        // else
+        return Arrays.hashCode((Object[]) array);
+    }
+
     private boolean annotationEquals(Object other) {
         if (this == other) {
             return true;
@@ -88,12 +143,52 @@ public class SynthesizedAnnotationInvocationHandler implements InvocationHandler
 
         for (Method attributeMethod : AnnotationUtils.getAttributeMethods(annotationType())) {
             Object thisValue = getAttributeValue(attributeMethod);
-            Object otherValue = null;//TODO
+            Object otherValue = ReflectionUtils.invokeMethod(attributeMethod,other);
             if (!ObjectUtils.nullSafeEquals(thisValue,otherValue)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private int annotationHashCode() {
+        int result = 0;
+
+        for (Method attributeMethod : AnnotationUtils.getAttributeMethods(annotationType())) {
+            Object value = getAttributeValue(attributeMethod);
+            int hashCode;
+            if (value.getClass().isArray()) {
+                hashCode = hashCodeForArray(value);
+            }
+            else {
+                hashCode = value.hashCode();
+            }
+            result += (127 * attributeMethod.getName().hashCode()) ^ hashCode;
+        }
+
+        return result;
+    }
+
+    private String annotationToString() {
+        StringBuilder sb = new StringBuilder("@").append(annotationType().getName()).append("(");
+
+        Iterator<Method> iterator = AnnotationUtils.getAttributeMethods(annotationType()).iterator();
+        while (iterator.hasNext()) {
+            Method attributeMethod = iterator.next();
+            sb.append(attributeMethod.getName());
+            sb.append('=');
+            sb.append(attributeValueToString(getAttributeValue(attributeMethod)));
+            sb.append(iterator.hasNext() ? ", " : "");
+        }
+
+        return sb.append(")").toString();
+    }
+
+    private String attributeValueToString(Object value) {
+        if (value instanceof Object[]) {
+            return "[" + StringUtils.arrayToDelimitedString((Object[]) value, ", ") + "]";
+        }
+        return String.valueOf(value);
     }
 
 }

@@ -77,7 +77,7 @@ abstract class AbstractAliasAwareAnnotationAttributeExtractor<S> implements Anno
                 }
             }
         }
-        return null;
+        return attributeValue;
     }
 
     @Nullable

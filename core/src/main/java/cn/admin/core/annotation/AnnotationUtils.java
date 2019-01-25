@@ -4,8 +4,7 @@ import cn.admin.lang.Nullable;
 import cn.admin.util.*;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.AnnotatedElement;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.util.*;
 
 public abstract class AnnotationUtils {
@@ -19,6 +18,15 @@ public abstract class AnnotationUtils {
             new ConcurrentReferenceHashMap<>(256);
 
     private static final Map<AnnotatedElement,Annotation[]> declareAnnotationsCache =
+            new ConcurrentReferenceHashMap<>(256);
+
+    private static final Map<Class<?>,Set<Method>> annotatedBaseTypeCache =
+            new ConcurrentReferenceHashMap<>(256);
+
+    @Deprecated
+    private static final Map<Class<?>,Set<Method>> annotatedInterfaceCache = annotatedBaseTypeCache;
+
+    private static final Map<Class<? extends Annotation>,Boolean> synthesizaleCache =
             new ConcurrentReferenceHashMap<>(256);
 
     private static final Map<Class<? extends Annotation>, Map<String, List<String>>> attributeAliasesCache =
@@ -58,13 +66,18 @@ public abstract class AnnotationUtils {
         }
         map = new LinkedHashMap<>();
         for (Method attribute : getAttributeMethods(annotationType)) {
-//TODO
+            List<String> aliasNames = getAttributeAliasNames(attribute);
+            if (!aliasNames.isEmpty()) {
+                map.put(attribute.getName(),aliasNames);
+            }
         }
-        return null;
+        attributeAliasesCache.put(annotationType,map);
+        return map;
     }
 
     static List<String> getAttributeAliasNames(Method attribute) {
-        return null;//TODO
+        AliasDescriptor descriptor = AliasDescriptor.from(attribute);
+        return descriptor != null ? descriptor.getAttributeAliasNames() : Collections.emptyList();
     }
 
     static List<Method> getAttributeMethods(Class<? extends Annotation> annotationType) {
@@ -85,6 +98,10 @@ public abstract class AnnotationUtils {
 
     static boolean isAttributeMethod(@Nullable Method method) {
         return (method != null && method.getParameterCount() == 0 && method.getReturnType() != void.class);
+    }
+
+    static boolean isAnnotationTypeMethod(@Nullable Method method) {
+        return (method != null && method.getName().equals("annotationType") && method.getParameterCount() == 0);
     }
 
     @Nullable
@@ -118,6 +135,90 @@ public abstract class AnnotationUtils {
             handleIntrospectionFailure(annotationType,ex);
             return null;
         }
+    }
+
+    static Annotation[] synthesizeAnnotationArray(Annotation[] annotations,
+                                                  @Nullable Object annotatedElement) {
+        if (hasPlainJavaAnnotationsOnly(annotatedElement)) {
+            return annotations;
+        }
+
+        Annotation[] synthesized = (Annotation[]) Array.newInstance(
+                annotations.getClass().getComponentType(), annotations.length);
+        for (int i = 0;i < annotations.length;i ++) {
+            synthesized[i] = synthesizeAnnotation(annotations[i],annotatedElement);
+        }
+        return synthesized;
+    }
+
+    @SuppressWarnings("unchecked")
+    static <A extends Annotation> A synthesizeAnnotation(A annotation,
+                                                         @Nullable Object annotatedElement) {
+        if (annotation instanceof SynthesizedAnnotation || hasPlainJavaAnnotationsOnly(annotatedElement)) {
+            return annotation;
+        }
+
+        Class<? extends Annotation> annotationType = annotation.annotationType();
+        if (!isSynthesizable(annotationType)) {
+            return annotation;
+        }
+
+        DefaultAnnotationAttributeExtractor attributeExtractor =
+                new DefaultAnnotationAttributeExtractor(annotation,annotatedElement);
+        InvocationHandler handler = new SynthesizedAnnotationInvocationHandler(attributeExtractor);
+        Class<?>[] exposedInterfaces = new Class<?>[]{annotationType,SynthesizedAnnotation.class};
+        return (A) Proxy.newProxyInstance(annotation.getClass().getClassLoader(),exposedInterfaces,
+                handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isSynthesizable(Class<? extends Annotation> annotationType) {
+        if (hasPlainJavaAnnotationsOnly(annotationType)) {
+            return false;
+        }
+        Boolean synthesizable = synthesizaleCache.get(annotationType);
+        if (synthesizable != null) {
+            return synthesizable;
+        }
+
+        synthesizable = Boolean.FALSE;
+        for (Method attribute : getAttributeMethods(annotationType)) {
+            if (!getAttributeAliasNames(attribute).isEmpty()) {
+                synthesizable = Boolean.TRUE;
+                break;
+            }
+            Class<?> returnType = attribute.getReturnType();
+            if (Annotation[].class.isAssignableFrom(returnType)) {
+                Class<? extends Annotation> nestedAnnotationType =
+                        (Class<? extends Annotation>) returnType.getComponentType();
+                if (isSynthesizable(nestedAnnotationType)) {
+                    synthesizable = Boolean.TRUE;
+                    break;
+                }
+            } else if (Annotation.class.isAssignableFrom(returnType)) {
+                Class<? extends Annotation> nestedAnnotationType = (Class<? extends Annotation>) returnType;
+                if (isSynthesizable(nestedAnnotationType)) {
+                    synthesizable = Boolean.TRUE;
+                    break;
+                }
+            }
+        }
+
+        synthesizaleCache.put(annotationType,synthesizable);
+        return synthesizable;
+    }
+
+    static boolean hasPlainJavaAnnotationsOnly(@Nullable Object annotatedElement) {
+        Class<?> clazz;
+        if (annotatedElement instanceof Class) {
+            clazz = (Class<?>) annotatedElement;
+        } else if (annotatedElement instanceof Member) {
+            clazz = ((Member)annotatedElement).getDeclaringClass();
+        } else {
+            return false;
+        }
+        String name = clazz.getName();
+        return (name.startsWith("java") || name.startsWith("cn.admin.lang."));
     }
 
     static void handleIntrospectionFailure(@Nullable AnnotatedElement element,Throwable ex) {
@@ -291,6 +392,57 @@ public abstract class AnnotationUtils {
                         aliasedAttribute.getDeclaringClass().getName());
                 throw new AnnotationConfigurationException(msg);
             }
+        }
+
+        private void validateAgainst(AliasDescriptor otherDescriptor) {
+            validateDefaultValueConfiguration(otherDescriptor.sourceAttribute);
+        }
+
+        private boolean isAliasFor(AliasDescriptor otherDescriptor) {
+            for (AliasDescriptor lhs = this; lhs != null; lhs = lhs.getAttributeOverrideDescriptor()) {
+                for (AliasDescriptor rhs = otherDescriptor; rhs != null; rhs = rhs.getAttributeOverrideDescriptor()) {
+                    if (lhs.aliasedAttribute.equals(rhs.aliasedAttribute)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private List<AliasDescriptor> getOtherDescriptor() {
+            List<AliasDescriptor> otherDescriptors = new ArrayList<>();
+            for (Method currentAttribute : getAttributeMethods(this.sourceAnnotationType)) {
+                if (!this.sourceAttribute.equals(currentAttribute)) {
+                    AliasDescriptor otherDescriptor = AliasDescriptor.from(currentAttribute);
+                    if (otherDescriptor != null) {
+                        otherDescriptors.add(otherDescriptor);
+                    }
+                }
+            }
+            return otherDescriptors;
+        }
+
+        public List<String> getAttributeAliasNames() {
+            if (this.isAliasPair) {
+                return Collections.singletonList(this.aliasedAttributeName);
+            }
+
+            List<String> aliases = new ArrayList<>();
+            for (AliasDescriptor otherDescriptor : getOtherDescriptor()) {
+                if (this.isAliasFor(otherDescriptor)) {
+                    this.validateAgainst(otherDescriptor);
+                    aliases.add(otherDescriptor.sourceAttributeName);
+                }
+            }
+            return aliases;
+        }
+
+        @Nullable
+        private AliasDescriptor getAttributeOverrideDescriptor() {
+            if (this.isAliasPair) {
+                return null;
+            }
+            return AliasDescriptor.from(this.aliasedAttribute);
         }
 
         private String getAliasedAttributeName(AliasFor aliasFor,Method attribute) {

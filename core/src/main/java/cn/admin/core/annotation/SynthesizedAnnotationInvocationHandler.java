@@ -32,6 +32,9 @@ public class SynthesizedAnnotationInvocationHandler implements InvocationHandler
         if (ReflectionUtils.isHashCodeMethod(method)) {
             return annotationHashCode();
         }
+        if (ReflectionUtils.isToStringMethod(method)) {
+            return annotationToString();
+        }
         if (AnnotationUtils.isAnnotationTypeMethod(method)) {
             return annotationType();
         }

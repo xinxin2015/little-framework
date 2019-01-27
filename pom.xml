@@ -10,8 +10,12 @@
     <version>1.0-SNAPSHOT</version>
     <modules>
         <module>core</module>
+        <module>beans</module>
     </modules>
 
+    <properties>
+        <groovyVersion>2.5.5</groovyVersion>
+    </properties>
 
     <dependencies>
         <dependency>

@@ -2,6 +2,7 @@ package cn.admin.core;
 
 import cn.admin.lang.Nullable;
 import cn.admin.util.ConcurrentReferenceHashMap;
+import cn.admin.util.ObjectUtils;
 import cn.admin.util.ReflectionUtils;
 
 import java.io.IOException;
@@ -22,10 +23,96 @@ final class SerializableTypeWrapper {
 
     }
 
+    @Nullable
+    public static Type forField(Field field) {
+        return forTypeProvider(new FieldTypeProvider(field));
+    }
+
+    @Nullable
+    public static Type forMethodParameter(MethodParameter methodParameter) {
+        return forTypeProvider(new MethodParameterTypeProvider(methodParameter));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Type> T unwrap(T type) {
+        Type unwrapped = type;
+        while (unwrapped instanceof SerializableTypeProxy) {
+            unwrapped = ((SerializableTypeProxy)type).getTypeProvider().getType();
+        }
+        return unwrapped != null ? (T) unwrapped : type;
+    }
+
+    @Nullable
+    static Type forTypeProvider(TypeProvider provider) {
+        Type providerType = provider.getType();
+        if (providerType == null || providerType instanceof Serializable) {
+            return providerType;
+        }
+        if (GraalDetector.inImageCode() || !Serializable.class.isAssignableFrom(Class.class)) {
+            return providerType;
+        }
+        Type cached = cache.get(providerType);
+        if (cached != null) {
+            return cached;
+        }
+        for (Class<?> type : SUPPORTED_SERIALIZABLE_TYPES) {
+            if (type.isInstance(providerType)) {
+                ClassLoader classLoader = provider.getClass().getClassLoader();
+                Class<?>[] interfaces = new Class<?>[] {type,SerializableTypeProxy.class,
+                        Serializable.class};
+                InvocationHandler handler = new TypeProxyInvocationHandler(provider);
+                cached = (Type) Proxy.newProxyInstance(classLoader,interfaces,handler);
+                cache.put(providerType,cached);
+                return cached;
+            }
+        }
+        throw new IllegalArgumentException("Unsupported Type class: " + providerType.getClass().getName());
+    }
+
     interface SerializableTypeProxy {
 
         TypeProvider getTypeProvider();
 
+    }
+
+    private static class TypeProxyInvocationHandler implements InvocationHandler,Serializable {
+
+        private final TypeProvider provider;
+
+        TypeProxyInvocationHandler(TypeProvider provider) {
+            this.provider = provider;
+        }
+
+        @Override
+        @Nullable
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if (method.getName().equals("equals") && args != null) {
+                Object other = args[0];
+                if (other instanceof Type) {
+                    other = unwrap((Type)other);
+                }
+                return ObjectUtils.nullSafeEquals(this.provider.getType(),other);
+            } else if (method.getName().equals("hashCode")) {
+                return ObjectUtils.nullSafeHashCode(this.provider.getType());
+            } else if (method.getName().equals("getTypeProvider")) {
+                return this.provider;
+            }
+
+            if (Type.class == method.getReturnType() && args == null) {
+                return forTypeProvider(new MethodInvokeTypeProvider(this.provider,method,-1));
+            } else if (Type[].class == method.getReturnType() && args == null) {
+                Type[] result = new Type[((Type[]) method.invoke(this.provider.getType())).length];
+                for (int i = 0; i < result.length; i++) {
+                    result[i] = forTypeProvider(new MethodInvokeTypeProvider(this.provider, method, i));
+                }
+                return result;
+            }
+            try {
+                return method.invoke(this.provider.getType(), args);
+            } catch (InvocationTargetException ex) {
+                throw ex.getTargetException();
+            }
+        }
     }
 
     interface TypeProvider extends Serializable {

@@ -3,10 +3,7 @@ package cn.admin.core;
 import cn.admin.lang.Nullable;
 
 import java.io.Serializable;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
+import java.lang.reflect.*;
 
 import cn.admin.core.SerializableTypeWrapper.*;
 import cn.admin.util.ConcurrentReferenceHashMap;
@@ -87,6 +84,31 @@ public class ResolvableType implements Serializable {
         this.hash = null;
     }
 
+    public Type getType() {
+        return SerializableTypeWrapper.unwrap(this.type);
+    }
+
+    @Nullable
+    public Class<?> getRawClass() {
+        if (this.type == this.resolved) {
+            return this.resolved;
+        }
+        Type rawType = this.type;
+        if (rawType instanceof ParameterizedType) {
+            rawType = ((ParameterizedType) rawType).getRawType();
+        }
+        return rawType instanceof Class ? (Class<?>) rawType : null;
+    }
+
+    public Object getSource() {
+        Object source = (this.typeProvider != null ? this.typeProvider.getSource() : null);
+        return source != null ? source : this.type;
+    }
+
+    public Class<?> toClass() {
+        return resolve(Object.class);
+    }
+
     public ResolvableType getComponentType() {
         if (this == NONE) {
             return NONE;
@@ -102,13 +124,48 @@ public class ResolvableType implements Serializable {
             return forType(((GenericArrayType)this.type).getGenericComponentType(),
                     this.variableResolver);
         }
-        return null;//TODO
+        return resolveType().getComponentType();
     }
 
     ResolvableType resolveType() {
         if (this.type instanceof ParameterizedType) {
             return forType(((ParameterizedType)this.type).getRawType(),variableResolver);
         }
+        if (this.type instanceof WildcardType) {
+            Type resolved = resolveBounds(((WildcardType) this.type).getUpperBounds());
+            if (resolved == null) {
+                resolved = resolveBounds(((WildcardType) this.type).getLowerBounds());
+            }
+            return forType(resolved,this.variableResolver);
+        }
+        if (this.type instanceof TypeVariable) {
+            TypeVariable<?> variable = (TypeVariable<?>) this.type;
+            if (this.variableResolver != null) {
+                ResolvableType resolved = this.variableResolver.resolveVariable(variable);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+            return forType(resolveBounds(variable.getBounds()),variableResolver);
+        }
+        return NONE;
+    }
+
+    @Nullable
+    private Type resolveBounds(Type[] bounds) {
+        if (bounds.length == 0 || bounds[0] == Object.class) {
+            return null;
+        }
+        return bounds[0];
+    }
+
+    @Nullable
+    public Class<?> resolve() {
+        return this.resolved;
+    }
+
+    public Class<?> resolve(Class<?> fallback) {
+        return this.resolved != null ? resolved : fallback;
     }
 
     private Class<?> resolveClass() {
@@ -119,9 +176,11 @@ public class ResolvableType implements Serializable {
             return (Class<?>) this.type;
         }
         if (this.type instanceof GenericArrayType) {
-            return null;//TODO
+            Class<?> resolvedComponent = getComponentType().resolve();
+            return resolvedComponent != null ? Array.newInstance(resolvedComponent,0).getClass()
+                    : null;
         }
-        return null;//TODO
+        return resolveType().resolve();
     }
 
     @Override

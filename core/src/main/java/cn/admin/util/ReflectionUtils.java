@@ -19,6 +19,9 @@ public abstract class ReflectionUtils {
     private static final Map<Class<?>, Method[]> declareMethodsCache =
             new ConcurrentReferenceHashMap<>(256);
 
+    private static final Map<Class<?>,Field[]> declaredFieldsCache =
+            new ConcurrentReferenceHashMap<>(256);
+
     public static void makeAccessible(Method method) {
         if ((!Modifier.isPublic(method.getModifiers()) ||
                 !Modifier.isPublic(method.getDeclaringClass().getModifiers())) && !method.isAccessible()) {
@@ -160,6 +163,45 @@ public abstract class ReflectionUtils {
                     }
                     result.add(ifcMethod);
                 }
+            }
+        }
+        return result;
+    }
+
+    @Nullable
+    public static Field findField(Class<?> clazz, String name) {
+        return findField(clazz, name, null);
+    }
+
+    @Nullable
+    public static Field findField(Class<?> clazz, @Nullable String name, @Nullable Class<?> type) {
+        Assert.notNull(clazz, "Class must not be null");
+        Assert.isTrue(name != null || type != null, "Either name or type of the field must be specified");
+        Class<?> searchType = clazz;
+        while (Object.class != searchType && searchType != null) {
+            Field[] fields = getDeclaredFields(searchType);
+            for (Field field : fields) {
+                if ((name == null || name.equals(field.getName())) &&
+                        (type == null || type.equals(field.getType()))) {
+                    return field;
+                }
+            }
+            searchType = searchType.getSuperclass();
+        }
+        return null;
+    }
+
+    private static Field[] getDeclaredFields(Class<?> clazz) {
+        Assert.notNull(clazz, "Class must not be null");
+        Field[] result = declaredFieldsCache.get(clazz);
+        if (result == null) {
+            try {
+                result = clazz.getDeclaredFields();
+                declaredFieldsCache.put(clazz, (result.length == 0 ? NO_FIELDS : result));
+            }
+            catch (Throwable ex) {
+                throw new IllegalStateException("Failed to introspect Class [" + clazz.getName() +
+                        "] from ClassLoader [" + clazz.getClassLoader() + "]", ex);
             }
         }
         return result;

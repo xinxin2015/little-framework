@@ -1,5 +1,8 @@
 package cn.admin.util;
 
+import cn.admin.lang.Nullable;
+
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -33,6 +36,25 @@ public abstract class ClassUtils {
             }
         }
         return false;
+    }
+
+    public static Class<?> resolvePrimitiveIfNecessary(Class<?> clazz) {
+        Assert.notNull(clazz, "Class must not be null");
+        return (clazz.isPrimitive() && clazz != void.class ? primitiveTypeToWrapperMap.get(clazz) : clazz);
+    }
+
+    public static String getQualifiedName(Class<?> clazz) {
+        Assert.notNull(clazz, "Class must not be null");
+        return clazz.getTypeName();
+    }
+
+    public static String getQualifiedMethodName(Method method) {
+        return getQualifiedMethodName(method, null);
+    }
+
+    public static String getQualifiedMethodName(Method method, @Nullable Class<?> clazz) {
+        Assert.notNull(method, "Method must not be null");
+        return (clazz != null ? clazz : method.getDeclaringClass()).getName() + '.' + method.getName();
     }
 
 }

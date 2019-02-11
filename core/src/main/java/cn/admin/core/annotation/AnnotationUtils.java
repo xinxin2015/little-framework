@@ -17,7 +17,7 @@ public abstract class AnnotationUtils {
     private static final Map<AnnotationCacheKey,Boolean> metaPresentCache =
             new ConcurrentReferenceHashMap<>(256);
 
-    private static final Map<AnnotatedElement,Annotation[]> declareAnnotationsCache =
+    private static final Map<AnnotatedElement,Annotation[]> declaredAnnotationsCache =
             new ConcurrentReferenceHashMap<>(256);
 
     private static final Map<Class<?>,Set<Method>> annotatedBaseTypeCache =
@@ -104,6 +104,15 @@ public abstract class AnnotationUtils {
         return (method != null && method.getName().equals("annotationType") && method.getParameterCount() == 0);
     }
 
+    static Annotation[] getDeclaredAnnotations(AnnotatedElement element) {
+        if (element instanceof Class || element instanceof Member) {
+            // Class/Field/Method/Constructor returns a defensively cloned array from getDeclaredAnnotations.
+            // Since we use our result for internal iteration purposes only, it's safe to use a shared copy.
+            return declaredAnnotationsCache.computeIfAbsent(element, AnnotatedElement::getDeclaredAnnotations);
+        }
+        return element.getDeclaredAnnotations();
+    }
+
     @Nullable
     public static Object getDefaultValue(Annotation annotation) {
         return getDefaultValue(annotation,VALUE);
@@ -137,6 +146,168 @@ public abstract class AnnotationUtils {
         }
     }
 
+    static AnnotationAttributes retrieveAnnotationAttributes(@Nullable Object annotatedElement,Annotation annotation,
+                                                             boolean classValuesAsString, boolean nestedAnnotationsAsMap) {
+        Class<? extends Annotation> annotationType = annotation.annotationType();
+        AnnotationAttributes attributes = new AnnotationAttributes(annotationType);
+
+        for (Method method : getAttributeMethods(annotationType)) {
+            try {
+                Object attributeValue = method.invoke(annotation);
+                Object defaultValue = method.getDefaultValue();
+                if (defaultValue != null && ObjectUtils.nullSafeEquals(attributeValue,defaultValue)) {
+                    attributeValue = new DefaultValueHolder(defaultValue);
+                }
+                attributes.put(method.getName(),
+                        adaptValue(annotatedElement, attributeValue, classValuesAsString, nestedAnnotationsAsMap));
+            } catch (Throwable ex) {
+                if (ex instanceof InvocationTargetException) {
+                    Throwable targetException = ((InvocationTargetException) ex).getTargetException();
+                    rethrowAnnotationConfigurationException(targetException);
+                }
+                throw new IllegalStateException("Could not obtain annotation attribute value for " + method, ex);
+            }
+        }
+        return attributes;
+    }
+
+    @Nullable
+    static Object adaptValue(@Nullable Object annotatedElement,@Nullable Object value,
+                             boolean classValuesAsString,boolean nestedAnnotationsAsMap) {
+        if (classValuesAsString) {
+            if (value instanceof Class) {
+                return ((Class<?>) value).getName();
+            }
+            else if (value instanceof Class[]) {
+                Class<?>[] clazzArray = (Class<?>[]) value;
+                String[] classNames = new String[clazzArray.length];
+                for (int i = 0; i < clazzArray.length; i++) {
+                    classNames[i] = clazzArray[i].getName();
+                }
+                return classNames;
+            }
+        }
+
+        if (value instanceof Annotation) {
+            Annotation annotation = (Annotation) value;
+            if (nestedAnnotationsAsMap) {
+                return getAnnotationAttributes(annotatedElement, annotation, classValuesAsString, true);
+            }
+            else {
+                return synthesizeAnnotation(annotation, annotatedElement);
+            }
+        }
+
+        if (value instanceof Annotation[]) {
+            Annotation[] annotations = (Annotation[]) value;
+            if (nestedAnnotationsAsMap) {
+                AnnotationAttributes[] mappedAnnotations = new AnnotationAttributes[annotations.length];
+                for (int i = 0; i < annotations.length; i++) {
+                    mappedAnnotations[i] =
+                            getAnnotationAttributes(annotatedElement, annotations[i], classValuesAsString, true);
+                }
+                return mappedAnnotations;
+            }
+            else {
+                return synthesizeAnnotationArray(annotations, annotatedElement);
+            }
+        }
+
+        // Fallback
+        return value;
+    }
+
+    private static AnnotationAttributes getAnnotationAttributes(@Nullable Object annotatedElement,
+                                                                Annotation annotation, boolean classValuesAsString, boolean nestedAnnotationsAsMap) {
+
+        AnnotationAttributes attributes =
+                retrieveAnnotationAttributes(annotatedElement, annotation, classValuesAsString, nestedAnnotationsAsMap);
+        postProcessAnnotationAttributes(annotatedElement, attributes, classValuesAsString, nestedAnnotationsAsMap);
+        return attributes;
+    }
+
+    public static void postProcessAnnotationAttributes(@Nullable Object annotatedElement,
+                                                       AnnotationAttributes attributes, boolean classValuesAsString) {
+
+        postProcessAnnotationAttributes(annotatedElement, attributes, classValuesAsString, false);
+    }
+
+    static void postProcessAnnotationAttributes(@Nullable Object annotatedElement,
+                                                @Nullable AnnotationAttributes attributes,boolean classValuesAsString
+            ,boolean nestedAnnotationsAsMap) {
+        if (attributes == null) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = attributes.annotationType();
+
+        // Track which attribute values have already been replaced so that we can short
+        // circuit the search algorithms.
+        Set<String> valuesAlreadyReplaced = new HashSet<>();
+
+        if (!attributes.validated) {
+            // Validate @AliasFor configuration
+            Map<String, List<String>> aliasMap = getAttributeAliasMap(annotationType);
+            aliasMap.forEach((attributeName, aliasedAttributeNames) -> {
+                if (valuesAlreadyReplaced.contains(attributeName)) {
+                    return;
+                }
+                Object value = attributes.get(attributeName);
+                boolean valuePresent = (value != null && !(value instanceof DefaultValueHolder));
+                for (String aliasedAttributeName : aliasedAttributeNames) {
+                    if (valuesAlreadyReplaced.contains(aliasedAttributeName)) {
+                        continue;
+                    }
+                    Object aliasedValue = attributes.get(aliasedAttributeName);
+                    boolean aliasPresent = (aliasedValue != null && !(aliasedValue instanceof DefaultValueHolder));
+                    // Something to validate or replace with an alias?
+                    if (valuePresent || aliasPresent) {
+                        if (valuePresent && aliasPresent) {
+                            // Since annotation attributes can be arrays, we must use ObjectUtils.nullSafeEquals().
+                            if (!ObjectUtils.nullSafeEquals(value, aliasedValue)) {
+                                String elementAsString =
+                                        (annotatedElement != null ? annotatedElement.toString() : "unknown element");
+                                throw new AnnotationConfigurationException(String.format(
+                                        "In AnnotationAttributes for annotation [%s] declared on %s, " +
+                                                "attribute '%s' and its alias '%s' are declared with values of [%s] and [%s], " +
+                                                "but only one is permitted.", attributes.displayName, elementAsString,
+                                        attributeName, aliasedAttributeName, ObjectUtils.nullSafeToString(value),
+                                        ObjectUtils.nullSafeToString(aliasedValue)));
+                            }
+                        }
+                        else if (aliasPresent) {
+                            // Replace value with aliasedValue
+                            attributes.put(attributeName,
+                                    adaptValue(annotatedElement, aliasedValue, classValuesAsString, nestedAnnotationsAsMap));
+                            valuesAlreadyReplaced.add(attributeName);
+                        }
+                        else {
+                            // Replace aliasedValue with value
+                            attributes.put(aliasedAttributeName,
+                                    adaptValue(annotatedElement, value, classValuesAsString, nestedAnnotationsAsMap));
+                            valuesAlreadyReplaced.add(aliasedAttributeName);
+                        }
+                    }
+                }
+            });
+            attributes.validated = true;
+        }
+
+        // Replace any remaining placeholders with actual default values
+        for (Map.Entry<String, Object> attributeEntry : attributes.entrySet()) {
+            String attributeName = attributeEntry.getKey();
+            if (valuesAlreadyReplaced.contains(attributeName)) {
+                continue;
+            }
+            Object value = attributeEntry.getValue();
+            if (value instanceof DefaultValueHolder) {
+                value = ((DefaultValueHolder) value).defaultValue;
+                attributes.put(attributeName,
+                        adaptValue(annotatedElement, value, classValuesAsString, nestedAnnotationsAsMap));
+            }
+        }
+    }
+
     static Annotation[] synthesizeAnnotationArray(Annotation[] annotations,
                                                   @Nullable Object annotatedElement) {
         if (hasPlainJavaAnnotationsOnly(annotatedElement)) {
@@ -147,6 +318,22 @@ public abstract class AnnotationUtils {
                 annotations.getClass().getComponentType(), annotations.length);
         for (int i = 0;i < annotations.length;i ++) {
             synthesized[i] = synthesizeAnnotation(annotations[i],annotatedElement);
+        }
+        return synthesized;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Nullable
+    static <A extends Annotation> A[] synthesizeAnnotationArray(
+            @Nullable Map<String, Object>[] maps, Class<A> annotationType) {
+
+        if (maps == null) {
+            return null;
+        }
+
+        A[] synthesized = (A[]) Array.newInstance(annotationType, maps.length);
+        for (int i = 0; i < maps.length; i++) {
+            synthesized[i] = synthesizeAnnotation(maps[i], annotationType, null);
         }
         return synthesized;
     }
@@ -169,6 +356,28 @@ public abstract class AnnotationUtils {
         Class<?>[] exposedInterfaces = new Class<?>[]{annotationType,SynthesizedAnnotation.class};
         return (A) Proxy.newProxyInstance(annotation.getClass().getClassLoader(),exposedInterfaces,
                 handler);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <A extends Annotation> A synthesizeAnnotation(Map<String, Object> attributes,
+                                                                Class<A> annotationType, @Nullable AnnotatedElement annotatedElement) {
+
+        MapAnnotationAttributeExtractor attributeExtractor =
+                new MapAnnotationAttributeExtractor(attributes, annotationType, annotatedElement);
+        InvocationHandler handler = new SynthesizedAnnotationInvocationHandler(attributeExtractor);
+        Class<?>[] exposedInterfaces = (canExposeSynthesizedMarker(annotationType) ?
+                new Class<?>[] {annotationType, SynthesizedAnnotation.class} : new Class<?>[] {annotationType});
+        return (A) Proxy.newProxyInstance(annotationType.getClassLoader(), exposedInterfaces, handler);
+    }
+
+    private static boolean canExposeSynthesizedMarker(Class<? extends Annotation> annotationType) {
+        try {
+            return (Class.forName(SynthesizedAnnotation.class.getName(), false, annotationType.getClassLoader()) ==
+                    SynthesizedAnnotation.class);
+        }
+        catch (ClassNotFoundException ex) {
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -221,8 +430,48 @@ public abstract class AnnotationUtils {
         return (name.startsWith("java") || name.startsWith("cn.admin.lang."));
     }
 
+    static boolean isInJavaLangAnnotationPackage(@Nullable Class<? extends Annotation> annotationType) {
+        return (annotationType != null && isInJavaLangAnnotationPackage(annotationType.getName()));
+    }
+
+    public static boolean isInJavaLangAnnotationPackage(@Nullable String annotationType) {
+        return (annotationType != null && annotationType.startsWith("java.lang.annotation"));
+    }
+
+    @Nullable
+    public static Object getValue(Annotation annotation) {
+        return getValue(annotation, VALUE);
+    }
+
+    @Nullable
+    public static Object getValue(@Nullable Annotation annotation,@Nullable String attributeName) {
+        if (annotation == null || !StringUtils.hasText(attributeName)) {
+            return null;
+        }
+        try {
+            Method method = annotation.annotationType().getDeclaredMethod(attributeName);
+            ReflectionUtils.makeAccessible(method);
+            return method.invoke(annotation);
+        } catch (NoSuchMethodException e) {
+            return null;
+        } catch (InvocationTargetException ex) {
+            rethrowAnnotationConfigurationException(ex.getTargetException());
+            throw new IllegalStateException(
+                    "Could not obtain value for annotation attribute '" + attributeName + "' in " + annotation, ex);
+        } catch (Throwable ex) {
+            handleIntrospectionFailure(annotation.getClass(), ex);
+            return null;
+        }
+    }
+
     static void handleIntrospectionFailure(@Nullable AnnotatedElement element,Throwable ex) {
         //TODO
+    }
+
+    static void rethrowAnnotationConfigurationException(Throwable ex) {
+        if (ex instanceof AnnotationConfigurationException) {
+            throw (AnnotationConfigurationException) ex;
+        }
     }
 
     private static final class AnnotationCacheKey implements Comparable<AnnotationCacheKey> {
@@ -467,6 +716,16 @@ public abstract class AnnotationUtils {
                     this.sourceAnnotationType.getSimpleName(), this.sourceAttributeName,
                     this.aliasedAnnotationType.getSimpleName(), this.aliasedAttributeName);
         }
+    }
+
+    private static class DefaultValueHolder {
+
+        final Object defaultValue;
+
+        public DefaultValueHolder(Object defaultValue) {
+            this.defaultValue = defaultValue;
+        }
+
     }
 
 }

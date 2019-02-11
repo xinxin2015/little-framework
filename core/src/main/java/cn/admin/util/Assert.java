@@ -63,9 +63,46 @@ public abstract class Assert {
         }
     }
 
+    public static void isAssignable(Class<?> superType, Class<?> subType) {
+        isAssignable(superType, subType, "");
+    }
+
+    public static void isAssignable(Class<?> superType, @Nullable Class<?> subType, String message) {
+        notNull(superType, "Super type to check against must not be null");
+        if (subType == null || !superType.isAssignableFrom(subType)) {
+            assignableCheckFailed(superType, subType, message);
+        }
+    }
+
     @Nullable
     private static String nullSafeGet(@Nullable Supplier<String> messageSupplier) {
         return messageSupplier != null ? messageSupplier.get() : null;
+    }
+
+    private static void assignableCheckFailed(Class<?> superType, @Nullable Class<?> subType, @Nullable String msg) {
+        String result = "";
+        boolean defaultMessage = true;
+        if (StringUtils.hasLength(msg)) {
+            if (endsWithSeparator(msg)) {
+                result = msg + " ";
+            }
+            else {
+                result = messageWithTypeName(msg, subType);
+                defaultMessage = false;
+            }
+        }
+        if (defaultMessage) {
+            result = result + (subType + " is not assignable to " + superType);
+        }
+        throw new IllegalArgumentException(result);
+    }
+
+    private static boolean endsWithSeparator(String msg) {
+        return (msg.endsWith(":") || msg.endsWith(";") || msg.endsWith(",") || msg.endsWith("."));
+    }
+
+    private static String messageWithTypeName(String msg, @Nullable Object typeName) {
+        return msg + (msg.endsWith(" ") ? "" : ": ") + typeName;
     }
 
 

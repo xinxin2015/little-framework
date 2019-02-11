@@ -2,7 +2,10 @@ package cn.admin.core.convert;
 
 import cn.admin.core.MethodParameter;
 import cn.admin.core.ResolvableType;
+import cn.admin.core.annotation.AnnotatedElementUtils;
 import cn.admin.lang.Nullable;
+import cn.admin.util.Assert;
+import cn.admin.util.ClassUtils;
 import cn.admin.util.ObjectUtils;
 
 import java.io.Serializable;
@@ -49,6 +52,73 @@ public class TypeDescriptor implements Serializable {
         this.type = this.resolvableType.resolve(field.getType());
         this.annotatedElement = new AnnotatedElementAdapter(field.getAnnotations());
     }
+
+    public TypeDescriptor(Property property) {
+        Assert.notNull(property,"Property must not be null");
+        this.resolvableType = ResolvableType.forMethodParameter(property.getMethodParameter());
+        this.type = this.resolvableType.resolve(property.getType());
+        this.annotatedElement = new AnnotatedElementAdapter(property.getAnnotations());
+    }
+
+    public TypeDescriptor(ResolvableType resolvableType,@Nullable Class<?> type,@Nullable Annotation[] annotations) {
+        this.resolvableType = resolvableType;
+        this.type = (type != null ? type : resolvableType.toClass());
+        this.annotatedElement = new AnnotatedElementAdapter(annotations);
+    }
+
+    public Class<?> getObjectType() {
+        return ClassUtils.resolvePrimitiveIfNecessary(getType());
+    }
+
+    public Class<?> getType() {
+        return type;
+    }
+
+    public ResolvableType getResolvableType() {
+        return resolvableType;
+    }
+
+    public Object getSource() {
+        return this.resolvableType.getSource();
+    }
+
+    public TypeDescriptor narrow(@Nullable Object value) {
+        if (value == null) {
+            return this;
+        }
+        ResolvableType narrowed = ResolvableType.forType(value.getClass(),getResolvableType());
+        return new TypeDescriptor(narrowed,value.getClass(),getAnnotations());
+    }
+
+    @Nullable
+    public TypeDescriptor upcast(@Nullable Class<?> superType) {
+        if (superType == null) {
+            return null;
+        }
+        Assert.isAssignable(superType,getType());
+        return new TypeDescriptor(getResolvableType().as(superType),superType,getAnnotations());
+    }
+
+    public String getName() {
+        return ClassUtils.getQualifiedName(getType());
+    }
+
+    public boolean isPrimitive() {
+        return getType().isPrimitive();
+    }
+
+    public Annotation[] getAnnotations() {
+        return this.annotatedElement.getAnnotations();
+    }
+
+    public boolean hasAnnotation(Class<? extends Annotation> annotationType) {
+        if (this.annotatedElement.isEmpty()) {
+            return false;
+        }
+        return AnnotatedElementUtils.isAnnotated(annotatedElement,annotationType);
+    }
+
+
 
     private class AnnotatedElementAdapter implements AnnotatedElement,Serializable {
 

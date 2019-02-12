@@ -438,6 +438,10 @@ public class ResolvableType implements Serializable {
                 getNested(methodParameter.getNestingLevel(), methodParameter.typeIndexesPerLevel);
     }
 
+    public static ResolvableType forClass(@Nullable Class<?> clazz) {
+        return new ResolvableType(clazz);
+    }
+
     static void resolveMethodParameter(MethodParameter methodParameter) {
         Assert.notNull(methodParameter,"MethodParameter must not be null");
         ResolvableType owner =

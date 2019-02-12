@@ -1,6 +1,9 @@
 package cn.admin.beans;
 
+import cn.admin.core.convert.TypeDescriptor;
 import cn.admin.lang.Nullable;
+
+import java.util.Map;
 
 public interface PropertyAccessor {
 
@@ -23,6 +26,23 @@ public interface PropertyAccessor {
     @Nullable
     Class<?> getPropertyType(String propertyName) throws BeansException;
 
-    //TODO
+    @Nullable
+    TypeDescriptor getPropertyTypeDescriptor(String propertyName) throws BeansException;
+
+    @Nullable
+    Object getPropertyValue(String propertyName) throws BeansException;
+
+    void setPropertyValue(String propertyName,@Nullable Object value) throws BeansException;
+
+    void setPropertyValue(PropertyValue pv) throws BeansException;
+
+    void setPropertyValues(Map<?,?> map) throws BeansException;
+
+    void setPropertyValues(PropertyValues pvs) throws BeansException;
+
+    void setPropertyValues(PropertyValues pvs,boolean ignoreUnknown) throws BeansException;
+
+    void setPropertyValues(PropertyValues pvs, boolean ignoreUnknown, boolean ignoreInvalid)
+            throws BeansException;
 
 }

@@ -13,6 +13,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -118,7 +119,42 @@ public class TypeDescriptor implements Serializable {
         return AnnotatedElementUtils.isAnnotated(annotatedElement,annotationType);
     }
 
+    @Nullable
+    public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
+        if (this.annotatedElement.isEmpty()) {
+            // Shortcut: AnnotatedElementUtils would have to expect AnnotatedElement.getAnnotations()
+            // to return a copy of the array, whereas we can do it more efficiently here.
+            return null;
+        }
+        return AnnotatedElementUtils.getMergedAnnotation(this.annotatedElement, annotationType);
+    }
 
+    public boolean isAssignableTo(TypeDescriptor typeDescriptor) {
+        boolean typeAssignable = typeDescriptor.getObjectType().isAssignableFrom(getObjectType());
+        if (!typeAssignable) {
+            return false;
+        }
+        if (isArray() && typeDescriptor.isArray()) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    private boolean isNestedAssignable(@Nullable TypeDescriptor nestedTypeDescriptor,
+                                       @Nullable TypeDescriptor otherNestedTypeDescriptor) {
+
+        return (nestedTypeDescriptor == null || otherNestedTypeDescriptor == null ||
+                nestedTypeDescriptor.isAssignableTo(otherNestedTypeDescriptor));
+    }
+
+    public boolean isCollection() {
+        return Collection.class.isAssignableFrom(getType());
+    }
+
+    public boolean isArray() {
+        return getType().isArray();
+    }
 
     private class AnnotatedElementAdapter implements AnnotatedElement,Serializable {
 

@@ -75,7 +75,6 @@ public final class Property {
     }
 
     Annotation[] getAnnotations() {
-
         return annotations;
     }
 

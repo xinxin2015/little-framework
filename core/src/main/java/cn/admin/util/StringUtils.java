@@ -2,6 +2,8 @@ package cn.admin.util;
 
 import cn.admin.lang.Nullable;
 
+import java.util.Collection;
+
 public abstract class StringUtils {
 
     public static boolean hasText(@Nullable CharSequence str) {
@@ -78,6 +80,10 @@ public abstract class StringUtils {
 
     public static boolean hasLength(@Nullable String str) {
         return (str != null && !str.isEmpty());
+    }
+
+    public static String[] toStringArray(Collection<String> collection) {
+        return collection.toArray(new String[0]);
     }
     //TODO
 

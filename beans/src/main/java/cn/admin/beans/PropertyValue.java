@@ -32,6 +32,30 @@ public class PropertyValue extends BeanMetadataAttributeAccessor implements Seri
         this.value = value;
     }
 
+    public PropertyValue(PropertyValue original) {
+        Assert.notNull(original, "Original must not be null");
+        this.name = original.getName();
+        this.value = original.getValue();
+        this.optional = original.isOptional();
+        this.converted = original.converted;
+        this.convertedValue = original.convertedValue;
+        this.conversionNecessary = original.conversionNecessary;
+        this.resolvedTokens = original.resolvedTokens;
+        setSource(original.getSource());
+        copyAttributesFrom(original);
+    }
+
+    public PropertyValue(PropertyValue original, @Nullable Object newValue) {
+        Assert.notNull(original, "Original must not be null");
+        this.name = original.getName();
+        this.value = newValue;
+        this.optional = original.isOptional();
+        this.conversionNecessary = original.conversionNecessary;
+        this.resolvedTokens = original.resolvedTokens;
+        setSource(original);
+        copyAttributesFrom(original);
+    }
+
     public String getName() {
         return name;
     }

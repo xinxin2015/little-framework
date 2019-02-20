@@ -81,6 +81,4 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory,Singlet
 
     void resolveAliases(StringValueResolver valueResolver);
 
-
-
 }

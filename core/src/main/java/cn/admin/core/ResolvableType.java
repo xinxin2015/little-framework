@@ -403,6 +403,12 @@ public class ResolvableType implements Serializable {
         return forType(null, new FieldTypeProvider(field), null).getNested(nestingLevel);
     }
 
+    public static ResolvableType forField(Field field, int nestingLevel, @Nullable Class<?> implementationClass) {
+        Assert.notNull(field, "Field must not be null");
+        ResolvableType owner = forType(implementationClass).as(field.getDeclaringClass());
+        return forType(null, new FieldTypeProvider(field), owner.asVariableResolver()).getNested(nestingLevel);
+    }
+
     public static ResolvableType forMethodParameter(Method method, int parameterIndex) {
         Assert.notNull(method, "Method must not be null");
         return forMethodParameter(new MethodParameter(method, parameterIndex));

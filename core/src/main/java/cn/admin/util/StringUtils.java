@@ -3,6 +3,7 @@ package cn.admin.util;
 import cn.admin.lang.Nullable;
 
 import java.util.Collection;
+import java.util.Iterator;
 
 public abstract class StringUtils {
 
@@ -84,6 +85,32 @@ public abstract class StringUtils {
 
     public static String[] toStringArray(Collection<String> collection) {
         return collection.toArray(new String[0]);
+    }
+
+    public static String collectionToCommaDelimitedString(@Nullable Collection<?> coll) {
+        return collectionToDelimitedString(coll,",");
+    }
+
+    public static String collectionToDelimitedString(@Nullable Collection<?> coll, String delim) {
+        return collectionToDelimitedString(coll, delim, "", "");
+    }
+
+    public static String collectionToDelimitedString(
+            @Nullable Collection<?> coll, String delim, String prefix, String suffix) {
+
+        if (CollectionUtils.isEmpty(coll)) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        Iterator<?> it = coll.iterator();
+        while (it.hasNext()) {
+            sb.append(prefix).append(it.next()).append(suffix);
+            if (it.hasNext()) {
+                sb.append(delim);
+            }
+        }
+        return sb.toString();
     }
     //TODO
 

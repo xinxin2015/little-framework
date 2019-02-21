@@ -1,8 +1,11 @@
 package cn.admin.beans.factory.config;
 
 import cn.admin.beans.BeansException;
+import cn.admin.beans.TypeConverter;
 import cn.admin.beans.factory.BeanFactory;
 import cn.admin.lang.Nullable;
+
+import java.util.Set;
 
 public interface AutowireCapableBeanFactory extends BeanFactory {
 
@@ -44,8 +47,11 @@ public interface AutowireCapableBeanFactory extends BeanFactory {
     <T> NamedBeanHolder<T> resolveNamedBean(Class<T> requiredType) throws BeansException;
 
     @Nullable
-    Object resolveDependency() throws BeansException;//TODO
+    Object resolveDependency(DependencyDescriptor descriptor,@Nullable String requestingBeanName) throws BeansException;
 
-
+    @Nullable
+    Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+                             @Nullable Set<String> autowireBeanNames,
+                             @Nullable TypeConverter typeConverter) throws BeansException;
 
 }

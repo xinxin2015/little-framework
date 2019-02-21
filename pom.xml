@@ -11,10 +11,13 @@
     <modules>
         <module>core</module>
         <module>beans</module>
+        <module>jcl</module>
     </modules>
 
     <properties>
         <groovyVersion>2.5.5</groovyVersion>
+        <log4jVersion>2.11.1</log4jVersion>
+        <slf4jVersion>1.7.25</slf4jVersion>
     </properties>
 
     <dependencies>

@@ -34,8 +34,8 @@ public interface Log {
 
     void debug(Object message,Throwable t);
 
-    void trance(Object message);
+    void trace(Object message);
 
-    void trance(Object message,Throwable t);
+    void trace(Object message,Throwable t);
 
 }

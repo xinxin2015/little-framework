@@ -27,6 +27,11 @@
             <artifactId>objenesis</artifactId>
             <version>${objenesisVersion}</version>
         </dependency>
+        <dependency>
+            <groupId>cn.admin</groupId>
+            <artifactId>jcl</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
 

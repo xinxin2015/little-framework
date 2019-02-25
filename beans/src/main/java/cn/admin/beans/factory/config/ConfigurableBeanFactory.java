@@ -6,6 +6,7 @@ import cn.admin.beans.TypeConverter;
 import cn.admin.beans.factory.BeanDefinitionStoreException;
 import cn.admin.beans.factory.BeanFactory;
 import cn.admin.beans.factory.HierarchicalBeanFactory;
+import cn.admin.beans.factory.NoSuchBeanDefinitionException;
 import cn.admin.core.convert.ConversionService;
 import cn.admin.lang.Nullable;
 import cn.admin.util.StringValueResolver;
@@ -81,4 +82,23 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory,Singlet
 
     void resolveAliases(StringValueResolver valueResolver);
 
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    boolean isFactoryBean(String name) throws NoSuchBeanDefinitionException;
+
+    void setCurrentlyInCreation(String beanName,boolean inCreation);
+
+    boolean isCurrentlyInCreation(String beanName);
+
+    void registerDependentBean(String beanName,String dependentBeanName);
+
+    String[] getDependentBeans(String beanName);
+
+    String[] getDependenciesForBean(String beanName);
+
+    void destroyBean(String beanName,Object beanInstance);
+
+    void destroyScopedBean(String beanNam);
+
+    void destroySingletons();
 }

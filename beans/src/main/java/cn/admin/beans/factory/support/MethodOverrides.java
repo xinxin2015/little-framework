@@ -18,6 +18,10 @@ public class MethodOverrides {
 
     }
 
+    public MethodOverrides(MethodOverrides other) {
+        addOverrides(other);
+    }
+
     public void addOverrides(@Nullable MethodOverrides other) {
         if (other != null) {
             this.modified = true;

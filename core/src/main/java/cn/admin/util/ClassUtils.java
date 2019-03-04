@@ -5,6 +5,7 @@ import cn.admin.lang.Nullable;
 import java.io.Closeable;
 import java.io.Externalizable;
 import java.io.Serializable;
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
@@ -97,15 +98,20 @@ public abstract class ClassUtils {
         ClassLoader cl = null;
         try {
             cl = Thread.currentThread().getContextClassLoader();
-        } catch (Throwable ex) {
+        } catch (Throwable ignored) {
 
         }
         if (cl == null) {
             cl = ClassUtils.class.getClassLoader();
             if (cl == null) {
+                try {
+                    cl = ClassLoader.getSystemClassLoader();
+                } catch (Throwable ignored) {
 
+                }
             }
         }
+        return cl;
     }
 
     public static boolean isInnerClass(Class<?> clazz) {
@@ -185,17 +191,85 @@ public abstract class ClassUtils {
         return (value != null ? isAssignable(type, value.getClass()) : !type.isPrimitive());
     }
 
-    public static Class<?> forName(String name,@Nullable ClassLoader classLoader) {
+    public static Class<?> forName(String name,@Nullable ClassLoader classLoader)
+            throws ClassNotFoundException,LinkageError{
         Assert.notNull(name,"Name must not be null");
-        Class<?> clazz =
+        Class<?> clazz = resolvePrimitiveClassName(name);
+        if (clazz == null) {
+            clazz = commonClassCache.get(name);
+        }
+        if (clazz != null) {
+            return clazz;
+        }
+
+        if (name.endsWith(ARRAY_SUFFIX)) {
+            String elementClassName = name.substring(0,name.length() - ARRAY_SUFFIX.length());
+            Class<?> elementClass = forName(elementClassName,classLoader);
+            return Array.newInstance(elementClass,0).getClass();
+        }
+
+        if (name.startsWith(NON_PRIMITIVE_ARRAY_PREFIX) && name.endsWith(";")) {
+            String elementName = name.substring(NON_PRIMITIVE_ARRAY_PREFIX.length(),
+                    name.length() - 1);
+            Class<?> elementClass = forName(elementName,classLoader);
+            return Array.newInstance(elementClass,0).getClass();
+        }
+
+        if (name.startsWith(INTERNAL_ARRAY_PREFIX)) {
+            String elementName = name.substring(INTERNAL_ARRAY_PREFIX.length());
+            Class<?> elementClass = forName(elementName, classLoader);
+            return Array.newInstance(elementClass, 0).getClass();
+        }
+
+        ClassLoader clToUse = classLoader;
+        if (clToUse == null) {
+            clToUse = getDefaultClassLoader();
+        }
+        try {
+            return Class.forName(name);
+        } catch (ClassNotFoundException e) {
+            int lastDotIndex = name.lastIndexOf(PACKAGE_SEPARATOR);
+            if (lastDotIndex != -1) {
+                String innerClassName =
+                        name.substring(0, lastDotIndex) + INNER_CLASS_SEPARATOR + name.substring(lastDotIndex + 1);
+                try {
+                    return Class.forName(innerClassName, false, clToUse);
+                }
+                catch (ClassNotFoundException ex2) {
+                    // Swallow - let original exception get through
+                }
+            }
+            throw e;
+        }
     }
 
     @Nullable
     public static Class<?> resolvePrimitiveClassName(@Nullable String name) {
         Class<?> result = null;
         if (name != null && name.length() <= 8) {
-
+            result = primitiveTypeNameMap.get(name);
         }
+        return result;
+    }
+
+    public static int getMethodCountForName(Class<?> clazz,String methodName) {
+        Assert.notNull(clazz,"Class must not be null");
+        Assert.notNull(methodName,"Method name must not be null");
+        int count = 0;
+        Method[] declareMethods = clazz.getDeclaredMethods();
+        for (Method method : declareMethods) {
+            if (methodName.equals(method.getName())) {
+                count ++;
+            }
+        }
+        Class<?>[] ifcs = clazz.getInterfaces();
+        for (Class<?> ifc : ifcs) {
+            count += getMethodCountForName(ifc,methodName);
+        }
+        if (clazz.getSuperclass() != null) {
+            count += getMethodCountForName(clazz.getSuperclass(),methodName);
+        }
+        return count;
     }
 
 }

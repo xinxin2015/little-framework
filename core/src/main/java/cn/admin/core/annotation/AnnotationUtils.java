@@ -468,6 +468,16 @@ public abstract class AnnotationUtils {
         //TODO
     }
 
+    @Nullable
+    static Annotation getAnnotation(AnnotatedElement element, String annotationName) {
+        for (Annotation annotation : element.getAnnotations()) {
+            if (annotation.annotationType().getName().equals(annotationName)) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
     static void rethrowAnnotationConfigurationException(Throwable ex) {
         if (ex instanceof AnnotationConfigurationException) {
             throw (AnnotationConfigurationException) ex;

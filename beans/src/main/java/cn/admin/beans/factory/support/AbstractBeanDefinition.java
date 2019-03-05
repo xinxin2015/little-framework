@@ -359,6 +359,11 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
     }
 
     @Override
+    public boolean isAutowireCandidate() {
+        return autowireCandidate;
+    }
+
+    @Override
     public void setPrimary(boolean primary) {
         this.primary = primary;
     }

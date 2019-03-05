@@ -15,11 +15,89 @@ public abstract class AnnotatedElementUtils {
 
     private static final Processor<Boolean> alwaysTrueAnnotationProcessor = new AlwaysTrueBooleanAnnotationProcessor();
 
+    public static AnnotatedElement forAnnotations(final Annotation... annotations) {
+        return new AnnotatedElement() {
+            @Override
+            @Nullable
+            @SuppressWarnings("unchecked")
+            public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+                for (Annotation ann : annotations) {
+                    if (ann.annotationType() == annotationClass) {
+                        return (T) ann;
+                    }
+                }
+                return null;
+            }
+
+            @Override
+            public Annotation[] getAnnotations() {
+                return annotations;
+            }
+
+            @Override
+            public Annotation[] getDeclaredAnnotations() {
+                return annotations;
+            }
+        };
+    }
+
+    public static boolean hasMetaAnnotationTypes(AnnotatedElement element, String annotationName) {
+        return hasMetaAnnotationTypes(element, null, annotationName);
+    }
+
+    private static boolean hasMetaAnnotationTypes(
+            AnnotatedElement element, @Nullable Class<? extends Annotation> annotationType, @Nullable String annotationName) {
+
+        return Boolean.TRUE.equals(
+                searchWithGetSemantics(element, annotationType, annotationName, new SimpleAnnotationProcessor<Boolean>() {
+                    @Override
+                    @Nullable
+                    public Boolean process(@Nullable AnnotatedElement annotatedElement, Annotation annotation, int metaDepth) {
+                        return (metaDepth > 0 ? Boolean.TRUE : CONTINUE);
+                    }
+                }));
+    }
+
+    public static Set<String> getMetaAnnotationTypes(AnnotatedElement element, Class<? extends Annotation> annotationType) {
+        return getMetaAnnotationTypes(element, element.getAnnotation(annotationType));
+    }
+
+    public static Set<String> getMetaAnnotationTypes(AnnotatedElement element, String annotationName) {
+        return getMetaAnnotationTypes(element, AnnotationUtils.getAnnotation(element, annotationName));
+    }
+
+    private static Set<String> getMetaAnnotationTypes(AnnotatedElement element, @Nullable Annotation composed) {
+        if (composed == null) {
+            return Collections.emptySet();
+        }
+
+        try {
+            final Set<String> types = new LinkedHashSet<>();
+            searchWithGetSemantics(composed.annotationType(), Collections.emptySet(), null, null, new SimpleAnnotationProcessor<Object>(true) {
+                @Override
+                @Nullable
+                public Object process(@Nullable AnnotatedElement annotatedElement, Annotation annotation, int metaDepth) {
+                    types.add(annotation.annotationType().getName());
+                    return CONTINUE;
+                }
+            }, new HashSet<>(), 1);
+            return types;
+        }
+        catch (Throwable ex) {
+            AnnotationUtils.rethrowAnnotationConfigurationException(ex);
+            throw new IllegalStateException("Failed to introspect annotations on " + element, ex);
+        }
+    }
+
     public static boolean isAnnotated(AnnotatedElement element,Class<? extends Annotation> annotationType) {
         if (element.isAnnotationPresent(annotationType)) {
             return true;
         }
         return Boolean.TRUE.equals(searchWithGetSemantics(element,annotationType,null,alwaysTrueAnnotationProcessor));
+    }
+
+    public static boolean isAnnotated(AnnotatedElement element, String annotationName) {
+        return Boolean.TRUE.equals(searchWithGetSemantics(element, null, annotationName, alwaysTrueAnnotationProcessor));
     }
 
     @Nullable

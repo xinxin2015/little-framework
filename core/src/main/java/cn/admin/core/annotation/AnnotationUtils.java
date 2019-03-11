@@ -217,6 +217,12 @@ public abstract class AnnotationUtils {
         return value;
     }
 
+    public static AnnotationAttributes getAnnotationAttributes(Annotation annotation, boolean classValuesAsString,
+                                                               boolean nestedAnnotationsAsMap) {
+
+        return getAnnotationAttributes(null, annotation, classValuesAsString, nestedAnnotationsAsMap);
+    }
+
     private static AnnotationAttributes getAnnotationAttributes(@Nullable Object annotatedElement,
                                                                 Annotation annotation, boolean classValuesAsString, boolean nestedAnnotationsAsMap) {
 

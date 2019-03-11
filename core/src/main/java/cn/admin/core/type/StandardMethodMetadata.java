@@ -1,14 +1,16 @@
 package cn.admin.core.type;
 
+import cn.admin.core.annotation.AnnotatedElementUtils;
 import cn.admin.util.Assert;
 import cn.admin.util.MultiValueMap;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Map;
 
 public class StandardMethodMetadata implements MethodMetadata {
 
-    private final Method introspectMethod;
+    private final Method introspectedMethod;
 
     private final boolean nestedAnnotationsAsMap;
 
@@ -18,67 +20,69 @@ public class StandardMethodMetadata implements MethodMetadata {
 
     public StandardMethodMetadata(Method introspectMethod,boolean nestedAnnotationsAsMap) {
         Assert.notNull(introspectMethod,"Method must not be null");
-        this.introspectMethod = introspectMethod;
+        this.introspectedMethod = introspectMethod;
         this.nestedAnnotationsAsMap = nestedAnnotationsAsMap;
     }
 
     @Override
     public String getMethodName() {
-        return this.introspectMethod.getName();
+        return this.introspectedMethod.getName();
     }
 
     @Override
     public String getDeclaringClassName() {
-        return this.introspectMethod.getDeclaringClass().getName();
+        return this.introspectedMethod.getDeclaringClass().getName();
     }
 
     @Override
     public String getReturnTypeName() {
-        return this.introspectMethod.getReturnType().getName();
+        return this.introspectedMethod.getReturnType().getName();
     }
 
     @Override
     public boolean isAbstract() {
-        return false;
+        return Modifier.isAbstract(this.introspectedMethod.getModifiers());
     }
 
     @Override
     public boolean isStatic() {
-        return false;
+        return Modifier.isStatic(this.introspectedMethod.getModifiers());
     }
 
     @Override
     public boolean isFinal() {
-        return false;
+        return Modifier.isFinal(this.introspectedMethod.getModifiers());
     }
 
     @Override
     public boolean isOverridable() {
-        return false;
+        return (!isStatic() && !isFinal() && !Modifier.isPrivate(this.introspectedMethod.getModifiers()));
     }
 
     @Override
     public boolean isAnnotated(String annotationName) {
-        return false;
+        return AnnotatedElementUtils.isAnnotated(this.introspectedMethod,annotationName);
     }
 
     @Override
     public Map<String, Object> getAnnotationAttributes(String annotationName) {
-        return null;
+        return getAnnotationAttributes(annotationName,false);
     }
 
     @Override
     public Map<String, Object> getAnnotationAttributes(String annotationName, boolean classValuesAsString) {
-        return null;
+        return AnnotatedElementUtils.getMergedAnnotationAttributes(this.introspectedMethod,
+                annotationName,classValuesAsString,this.nestedAnnotationsAsMap);
     }
 
     @Override
     public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationName) {
-        return null;
+        return getAllAnnotationAttributes(annotationName,false);
     }
 
     @Override
     public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationName, boolean classValuesAsString) {
-        return null;
+        return AnnotatedElementUtils.getAllAnnotationAttributes(this.introspectedMethod,
+                annotationName,classValuesAsString,this.nestedAnnotationsAsMap);
     }
 }

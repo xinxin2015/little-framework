@@ -1,6 +1,7 @@
 package cn.admin.core.type;
 
 import cn.admin.core.annotation.AnnotatedElementUtils;
+import cn.admin.lang.Nullable;
 import cn.admin.util.MultiValueMap;
 
 import java.lang.annotation.Annotation;
@@ -69,7 +70,7 @@ public class StandardAnnotationMetadata extends StandardClassMetadata implements
             Set<MethodMetadata> annotatedMethods = new LinkedHashSet<>(4);
             for (Method method : methods) {
                 if (!method.isBridge() && method.getAnnotations().length > 0 && AnnotatedElementUtils.isAnnotated(method,annotationName)) {
-                    annotatedMethods.add(null);//TODO
+                    annotatedMethods.add(new StandardMethodMetadata(method,this.nestedAnnotationsAsMap));
                 }
             }
             return annotatedMethods;
@@ -80,7 +81,7 @@ public class StandardAnnotationMetadata extends StandardClassMetadata implements
 
     @Override
     public boolean isAnnotated(String annotationName) {
-        return false;
+        return this.annotations.length > 0 && AnnotatedElementUtils.isAnnotated(getIntrospectedClass(),annotationName);
     }
 
     @Override
@@ -89,17 +90,20 @@ public class StandardAnnotationMetadata extends StandardClassMetadata implements
     }
 
     @Override
+    @Nullable
     public Map<String, Object> getAnnotationAttributes(String annotationName, boolean classValuesAsString) {
-        return null;
+        return (this.annotations.length > 0 ? AnnotatedElementUtils.getMergedAnnotationAttributes(
+                getIntrospectedClass(), annotationName, classValuesAsString, this.nestedAnnotationsAsMap) : null);
     }
 
     @Override
     public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationName) {
-        return null;
+        return getAllAnnotationAttributes(annotationName,false);
     }
 
     @Override
     public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationName, boolean classValuesAsString) {
-        return null;
+        return (this.annotations.length > 0 ? AnnotatedElementUtils.getAllAnnotationAttributes(
+                getIntrospectedClass(), annotationName, classValuesAsString, this.nestedAnnotationsAsMap) : null);
     }
 }

@@ -142,6 +142,9 @@ public abstract class StringUtils {
         sb.append(inString.substring(pos));
         return sb.toString();
     }
-    //TODO
+
+    public static String arrayToCommaDelimitedString(@Nullable Object[] arr) {
+        return arrayToDelimitedString(arr,",");
+    }
 
 }

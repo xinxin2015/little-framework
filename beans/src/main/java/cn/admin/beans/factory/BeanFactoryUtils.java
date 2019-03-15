@@ -1,5 +1,6 @@
 package cn.admin.beans.factory;
 
+import cn.admin.lang.Nullable;
 import cn.admin.util.Assert;
 
 import java.util.Map;
@@ -22,6 +23,10 @@ public abstract class BeanFactoryUtils {
            } while (beanName.startsWith(BeanFactory.FACTORY_BEAN_PREFIX));
            return beanName;
         });
+    }
+
+    public static boolean isFactoryDereference(@Nullable String name) {
+        return name != null && name.startsWith(BeanFactory.FACTORY_BEAN_PREFIX);
     }
 
 }

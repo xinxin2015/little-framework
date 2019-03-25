@@ -124,7 +124,7 @@ public class RootBeanDefinition extends AbstractBeanDefinition {
     }
 
     @Override
-    public AbstractBeanDefinition cloneBeanDefinition() {
+    public RootBeanDefinition cloneBeanDefinition() {
         return new RootBeanDefinition(this);
     }
 

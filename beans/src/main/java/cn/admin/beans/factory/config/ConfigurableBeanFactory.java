@@ -30,7 +30,7 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory,Singlet
     void setTempClassLoader(@Nullable ClassLoader tempClassLoader);
 
     @Nullable
-    void getTempClassLoader();
+    ClassLoader getTempClassLoader();
 
     void setCacheBeanMetadata(boolean cacheBeanMetadata);
 
@@ -98,7 +98,7 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory,Singlet
 
     void destroyBean(String beanName,Object beanInstance);
 
-    void destroyScopedBean(String beanNam);
+    void destroyScopedBean(String beanName);
 
     void destroySingletons();
 }

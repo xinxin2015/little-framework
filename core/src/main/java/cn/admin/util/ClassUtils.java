@@ -272,4 +272,19 @@ public abstract class ClassUtils {
         return count;
     }
 
+    public static Class<?> getUserClass(Object instance) {
+        Assert.notNull(instance,"Instance must not be null");
+        return getUserClass(instance.getClass());
+    }
+
+    public static Class<?> getUserClass(Class<?> clazz) {
+        if (clazz.getName().contains(CGLIB_CLASS_SEPARATOR)) {
+            Class<?> superClass = clazz.getSuperclass();
+            if (superClass != null && superClass != Object.class) {
+                return superClass;
+            }
+        }
+        return clazz;
+    }
+
 }

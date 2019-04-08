@@ -52,7 +52,7 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory,Singlet
 
     void copyRegisteredEditorsTo(PropertyEditorRegistry registry);
 
-    void setTypeConvert(TypeConverter typeConverter);
+    void setTypeConverter(TypeConverter typeConverter);
 
     TypeConverter getTypeConverter();
 

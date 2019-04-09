@@ -6,6 +6,8 @@ import java.net.URL;
 
 public abstract class ResourceUtils {
 
+
+
     public static URI toURI(URL url) throws URISyntaxException {
         return toURI(url.toString());
     }

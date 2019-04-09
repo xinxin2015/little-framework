@@ -630,6 +630,17 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
         return this.typeConverter;
     }
 
+    @Override
+    @Nullable
+    public TypeConverter getTypeConverter() {
+        TypeConverter customConverter = getCustomTypeConverter();
+        if (customConverter != null) {
+            return customConverter;
+        } else {
+            //TODO
+        }
+    }
+
     protected RootBeanDefinition getMergedLocalBeanDefinition(String beanName) throws BeansException {
         RootBeanDefinition mbd = this.mergedBeanDefinitions.get(beanName);
         if (mbd != null) {

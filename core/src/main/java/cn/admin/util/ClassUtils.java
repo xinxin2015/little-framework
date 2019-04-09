@@ -287,4 +287,19 @@ public abstract class ClassUtils {
         return clazz;
     }
 
+    public static Class<?> resolveClassName(String className,@Nullable ClassLoader classLoader) {
+        try {
+            return forName(className,classLoader);
+        } catch (IllegalAccessError err) {
+            throw new IllegalStateException("Readability mismatch in inheritance hierarchy of class [" +
+                    className + "]: " + err.getMessage(), err);
+        }
+        catch (LinkageError err) {
+            throw new IllegalArgumentException("Unresolvable class definition for class [" + className + "]", err);
+        }
+        catch (ClassNotFoundException ex) {
+            throw new IllegalArgumentException("Could not find class [" + className + "]", ex);
+        }
+    }
+
 }

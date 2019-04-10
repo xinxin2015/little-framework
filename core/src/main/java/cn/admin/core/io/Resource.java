@@ -42,7 +42,7 @@ public interface Resource extends InputStreamSource {
     Resource createRelative(String relativePath) throws IOException;
 
     @Nullable
-    String getFileName();
+    String getFilename();
 
     String getDescription();
 

@@ -106,7 +106,7 @@ public abstract class AbstractResource implements Resource {
 
     @Override
     @Nullable
-    public String getFileName() {
+    public String getFilename() {
         return null;
     }
 

@@ -2,12 +2,19 @@ package cn.admin.util;
 
 import cn.admin.lang.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 public abstract class StringUtils {
+
+    private static final String FOLDER_SEPARATOR = "/";
+
+    private static final String WINDOWS_FOLDER_SEPARATOR = "\\";
+
+    private static final String TOP_PATH = "..";
+
+    private static final String CURRENT_PATH = ".";
+
+    private static final char EXTENSION_SEPARATOR = '.';
 
     public static boolean hasText(@Nullable CharSequence str) {
         return (str != null && str.length() > 0 && containsText(str));
@@ -75,6 +82,34 @@ public abstract class StringUtils {
         char[] chars = str.toCharArray();
         chars[0] = updatedChar;
         return new String(chars, 0, chars.length);
+    }
+
+    @Nullable
+    public static String getFilename(@Nullable String path) {
+        if (path == null) {
+            return null;
+        }
+
+        int separatorIndex = path.lastIndexOf(FOLDER_SEPARATOR);
+        return separatorIndex != -1 ? path.substring(separatorIndex + 1) : path;
+    }
+
+    @Nullable
+    public static String getFilenameExtension(@Nullable String path) {
+        if (path == null) {
+            return null;
+        }
+
+        int extIndex = path.lastIndexOf(FOLDER_SEPARATOR);
+        if (extIndex == -1) {
+            return null;
+        }
+
+        int folderIndex = path.lastIndexOf(FOLDER_SEPARATOR);
+        if (folderIndex > extIndex) {
+            return null;
+        }
+        return path.substring(extIndex + 1);
     }
 
     public static boolean hasLength(@Nullable CharSequence str) {
@@ -205,6 +240,82 @@ public abstract class StringUtils {
 
     public static String arrayToCommaDelimitedString(@Nullable Object[] arr) {
         return arrayToDelimitedString(arr,",");
+    }
+
+    public static String applyRelativePath(String path,String relativePath) {
+        int separatorIndex = path.lastIndexOf(FOLDER_SEPARATOR);
+        if (separatorIndex != -1) {
+            String newPath = path.substring(0,separatorIndex);
+            if (!relativePath.startsWith(FOLDER_SEPARATOR)) {
+                newPath += FOLDER_SEPARATOR;
+            }
+            return newPath + relativePath;
+        } else {
+            return relativePath;
+        }
+    }
+
+    public static String cleanPath(String path) {
+        if (!hasLength(path)) {
+            return path;
+        }
+        String pathToUse = replace(path, WINDOWS_FOLDER_SEPARATOR, FOLDER_SEPARATOR);
+
+        // Strip prefix from path to analyze, to not treat it as part of the
+        // first path element. This is necessary to correctly parse paths like
+        // "file:core/../core/io/Resource.class", where the ".." should just
+        // strip the first "core" directory while keeping the "file:" prefix.
+        int prefixIndex = pathToUse.indexOf(':');
+        String prefix = "";
+        if (prefixIndex != -1) {
+            prefix = pathToUse.substring(0, prefixIndex + 1);
+            if (prefix.contains(FOLDER_SEPARATOR)) {
+                prefix = "";
+            }
+            else {
+                pathToUse = pathToUse.substring(prefixIndex + 1);
+            }
+        }
+        if (pathToUse.startsWith(FOLDER_SEPARATOR)) {
+            prefix = prefix + FOLDER_SEPARATOR;
+            pathToUse = pathToUse.substring(1);
+        }
+
+        String[] pathArray = delimitedListToStringArray(pathToUse, FOLDER_SEPARATOR);
+        LinkedList<String> pathElements = new LinkedList<>();
+        int tops = 0;
+
+        for (int i = pathArray.length - 1; i >= 0; i--) {
+            String element = pathArray[i];
+            if (CURRENT_PATH.equals(element)) {
+                // Points to current directory - drop it.
+            }
+            else if (TOP_PATH.equals(element)) {
+                // Registering top path found.
+                tops++;
+            }
+            else {
+                if (tops > 0) {
+                    // Merging path element with element corresponding to top path.
+                    tops--;
+                }
+                else {
+                    // Normal path element found.
+                    pathElements.add(0, element);
+                }
+            }
+        }
+
+        // Remaining top paths need to be retained.
+        for (int i = 0; i < tops; i++) {
+            pathElements.add(0, TOP_PATH);
+        }
+        // If nothing else left, at least explicitly point to current path.
+        if (pathElements.size() == 1 && "".equals(pathElements.getLast()) && !prefix.endsWith(FOLDER_SEPARATOR)) {
+            pathElements.add(0, CURRENT_PATH);
+        }
+
+        return prefix + collectionToDelimitedString(pathElements, FOLDER_SEPARATOR);
     }
 
 }

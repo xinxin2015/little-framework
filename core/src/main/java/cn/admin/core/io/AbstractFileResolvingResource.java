@@ -98,6 +98,23 @@ public abstract class AbstractFileResolvingResource extends AbstractResource {
     }
 
     @Override
+    public File getFile() throws IOException {
+        URL url = getURL();
+        if (url.getProtocol().startsWith(ResourceUtils.URL_PROTOCOL_VFS)) {
+            return VfsResourceDelegate.getResource(url).getFile();
+        }
+        return ResourceUtils.getFile(url, getDescription());
+    }
+
+    @Override
+    protected File getFileForLastModifiedCheck() throws IOException {
+        URL url = getURL();
+        if (ResourceUtils.isJarURL(url)) {
+            URL actualUrl = ResourceUtils.extractArchiveURL(url);
+        }
+    }
+
+    @Override
     public ReadableByteChannel readableChannel() throws IOException {
         try {
             return FileChannel.open(getFile().toPath(), StandardOpenOption.READ);

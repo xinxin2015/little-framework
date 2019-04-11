@@ -1,9 +1,8 @@
 package cn.admin.util;
 
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLConnection;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.net.*;
 
 public abstract class ResourceUtils {
 
@@ -70,6 +69,78 @@ public abstract class ResourceUtils {
 
     public static void useCachesIfNecessary(URLConnection con) {
         con.setUseCaches(con.getClass().getSimpleName().startsWith("JNLP"));
+    }
+
+    public static File getFile(String resourceLocation) throws FileNotFoundException {
+        Assert.notNull(resourceLocation,"Resource location must not be null");
+        if (resourceLocation.startsWith(CLASSPATH_URL_PREFIX)) {
+            String path = resourceLocation.substring(CLASSPATH_URL_PREFIX.length());
+            String description = "class path resource [" + path + "]";
+            ClassLoader cl = ClassUtils.getDefaultClassLoader();
+            URL url = cl != null ? cl.getResource(path) : ClassLoader.getSystemResource(path);
+            if (url == null) {
+                throw new FileNotFoundException(description +
+                        " cannot be resolved to absolute file path because it does not exist");
+            }
+            return getFile(url,description);
+        }
+        try {
+            return getFile(new URL(resourceLocation));
+        } catch (MalformedURLException e) {
+            return new File(resourceLocation);
+        }
+    }
+
+    public static File getFile(URL resourceUrl) throws FileNotFoundException {
+        return getFile(resourceUrl,"URL");
+    }
+
+    public static File getFile(URL resourceUrl,String description) throws FileNotFoundException {
+        Assert.notNull(resourceUrl,"Resource URL must not be null");
+        if (!URL_PROTOCOL_FILE.equals(resourceUrl.getProtocol())) {
+            throw new FileNotFoundException(
+                    description + " cannot be resolved to absolute file path " +
+                            "because it does not reside in the file system: " + resourceUrl);
+        }
+        try {
+            return new File(toURI(resourceUrl).getSchemeSpecificPart());
+        } catch (URISyntaxException e) {
+            return new File(resourceUrl.getFile());
+        }
+    }
+
+    public static URL extractJarFileURL(URL jarUrl) throws MalformedURLException {
+        String urlFile = jarUrl.getFile();
+        int separatorIndex = urlFile.indexOf(JAR_URL_SEPARATOR);
+        if (separatorIndex != -1) {
+            String jarFile = urlFile.substring(0,separatorIndex);
+            try {
+                return new URL(jarFile);
+            } catch (MalformedURLException e) {
+                if (!jarFile.startsWith("/")) {
+                    jarFile = "/" + jarFile;
+                }
+                return new URL(FILE_URL_PREFIX + jarFile);
+            }
+        } else {
+            return jarUrl;
+        }
+    }
+
+    public static URL extractArchiveURL(URL jarUrl) throws MalformedURLException {
+        String urlFile = jarUrl.getFile();
+        int endIndex = urlFile.indexOf(WAR_URL_SEPARATOR);
+        if (endIndex != -1) {
+            String warFile = urlFile.substring(0,endIndex);
+            if (URL_PROTOCOL_WAR.equals(jarUrl.getProtocol())) {
+                return new URL(warFile);
+            }
+            int startIndex = warFile.indexOf(WAR_URL_PREFIX);
+            if (startIndex != -1) {
+                return new URL(warFile.substring(startIndex + WAR_URL_PREFIX.length()));
+            }
+        }
+        return extractJarFileURL(jarUrl);
     }
 
 }

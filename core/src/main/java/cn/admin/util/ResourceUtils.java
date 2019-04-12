@@ -109,6 +109,20 @@ public abstract class ResourceUtils {
         }
     }
 
+    public static File getFile(URI resourceUri) throws FileNotFoundException {
+        return getFile(resourceUri,"URI");
+    }
+
+    public static File getFile(URI resourceUri,String description) throws FileNotFoundException {
+        Assert.notNull(resourceUri,"Resource URI must not be null");
+        if (!URL_PROTOCOL_FILE.equals(resourceUri.getScheme())) {
+            throw new FileNotFoundException(
+                    description + " cannot be resolved to absolute file path " +
+                            "because it does not reside in the file system: " + resourceUri);
+        }
+        return new File(resourceUri.getSchemeSpecificPart());
+    }
+
     public static URL extractJarFileURL(URL jarUrl) throws MalformedURLException {
         String urlFile = jarUrl.getFile();
         int separatorIndex = urlFile.indexOf(JAR_URL_SEPARATOR);

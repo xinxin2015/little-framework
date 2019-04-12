@@ -15,7 +15,9 @@ public class ResourceEditor extends PropertyEditorSupport {
 
     private final boolean ignoreUnresolvablePlaceholders;
 
-
+    public ResourceEditor() {
+        this(new DefaultResourceLoader(),null);
+    }
 
     public ResourceEditor(ResourceLoader resourceLoader,
                           @Nullable PropertyResolver propertyResolver) {
@@ -31,4 +33,14 @@ public class ResourceEditor extends PropertyEditorSupport {
         this.ignoreUnresolvablePlaceholders = ignoreUnresolvablePlaceholders;
     }
 
+    @Override
+    public void setAsText(String text) throws IllegalArgumentException {
+        super.setAsText(text);
+    }
+
+    protected String resolvePath(String path) {
+        if (this.propertyResolver == null) {
+
+        }
+    }
 }

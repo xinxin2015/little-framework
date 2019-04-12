@@ -111,7 +111,31 @@ public abstract class AbstractFileResolvingResource extends AbstractResource {
         URL url = getURL();
         if (ResourceUtils.isJarURL(url)) {
             URL actualUrl = ResourceUtils.extractArchiveURL(url);
+            if (actualUrl.getProtocol().startsWith(ResourceUtils.URL_PROTOCOL_VFS)) {
+                return VfsResourceDelegate.getResource(actualUrl).getFile();
+            }
+            return ResourceUtils.getFile(actualUrl,"Jar URL");
+        } else {
+            return getFile();
         }
+    }
+
+    protected boolean isFile(URI uri) {
+        try {
+            if (uri.getScheme().startsWith(ResourceUtils.URL_PROTOCOL_VFS)) {
+                return VfsResourceDelegate.getResource(uri).isFile();
+            }
+            return ResourceUtils.URL_PROTOCOL_FILE.equals(uri.getScheme());
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    protected File getFile(URI uri) throws IOException {
+        if (uri.getScheme().startsWith(ResourceUtils.URL_PROTOCOL_VFS)) {
+            return VfsResourceDelegate.getResource(uri).getFile();
+        }
+        return ResourceUtils.getFile(uri,getDescription());
     }
 
     @Override

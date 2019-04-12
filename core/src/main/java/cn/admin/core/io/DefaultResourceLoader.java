@@ -73,13 +73,12 @@ public class DefaultResourceLoader implements ResourceLoader {
         } else {
             try {
                 URL url = new URL(location);
-                return ResourceUtils.isFileURL(url) ?
+                return ResourceUtils.isFileURL(url) ? new FileUrlResource(url) :
+                        new UrlResource(url);
             } catch (MalformedURLException e) {
                 return getResourceByPath(location);
             }
         }
-
-        return null;
     }
 
     protected Resource getResourceByPath(String path) {

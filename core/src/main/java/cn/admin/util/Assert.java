@@ -63,6 +63,54 @@ public abstract class Assert {
         }
     }
 
+    public static void hasText(@Nullable String text,Supplier<String> messageSupplier) {
+        if (!StringUtils.hasText(text)) {
+            throw new IllegalArgumentException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    public static void hasText(@Nullable String text) {
+        hasText(text,
+                "[Assertion failed] - this String argument must have text; it must not be null, empty, or blank");
+    }
+
+    public static void doesNotContain(@Nullable String textToSearch, String substring, String message) {
+        if (StringUtils.hasLength(textToSearch) && StringUtils.hasLength(substring) &&
+                textToSearch.contains(substring)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    public static void doesNotContain(@Nullable String textToSearch, String substring, Supplier<String> messageSupplier) {
+        if (StringUtils.hasLength(textToSearch) && StringUtils.hasLength(substring) &&
+                textToSearch.contains(substring)) {
+            throw new IllegalArgumentException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    @Deprecated
+    public static void doesNotContain(@Nullable String textToSearch, String substring) {
+        doesNotContain(textToSearch, substring,
+                () -> "[Assertion failed] - this String argument must not contain the substring [" + substring + "]");
+    }
+
+    public static void notEmpty(@Nullable Object[] array,String message) {
+        if (ObjectUtils.isEmpty(array)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    public static void notEmpty(@Nullable Object[] array,Supplier<String> messageSupplier) {
+        if (ObjectUtils.isEmpty(array)) {
+            throw new IllegalArgumentException(nullSafeGet(messageSupplier));
+        }
+    }
+
+    @Deprecated
+    public static void notEmpty(@Nullable Object[] array) {
+        notEmpty(array, "[Assertion failed] - this array must not be empty: it must contain at least 1 element");
+    }
+
     public static void isAssignable(Class<?> superType, Class<?> subType) {
         isAssignable(superType, subType, "");
     }

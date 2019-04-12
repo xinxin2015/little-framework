@@ -5,6 +5,7 @@ import cn.admin.util.Assert;
 import cn.admin.util.ResourceUtils;
 import cn.admin.util.StringUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.*;
@@ -84,8 +85,32 @@ public class UrlResource extends AbstractFileResolvingResource {
     @Override
     public boolean isFile() {
         if (this.uri != null) {
-            return super
+            return super.isFile(this.uri);
+        } else {
+            return super.isFile();
         }
+    }
+
+    @Override
+    public File getFile() throws IOException {
+        if (this.uri != null) {
+            return super.getFile(this.uri);
+        } else {
+            return super.getFile();
+        }
+    }
+
+    @Override
+    public Resource createRelative(String relativePath) throws IOException {
+        if (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
+        }
+        return new UrlResource(new URL(this.url,relativePath));
+    }
+
+    @Override
+    public String getFilename() {
+        return StringUtils.getFilename(this.cleanedUrl.getPath());
     }
 
     @Override

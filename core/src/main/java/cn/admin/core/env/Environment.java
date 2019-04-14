@@ -9,6 +9,6 @@ public interface Environment extends PropertyResolver {
     @Deprecated
     boolean acceptsProfiles(String ...profiles);
 
-
+    boolean acceptsProfiles(Profiles profiles);
 
 }

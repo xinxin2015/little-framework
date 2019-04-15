@@ -2,8 +2,13 @@ package cn.admin.core.env;
 
 import cn.admin.core.convert.support.ConfigurableConversionService;
 import cn.admin.lang.Nullable;
+import cn.admin.util.PropertyPlaceholderHelper;
+import cn.admin.util.SystemPropertyUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public abstract class AbstractPropertyResolver implements ConfigurablePropertyResolver {
 
@@ -12,7 +17,22 @@ public abstract class AbstractPropertyResolver implements ConfigurablePropertyRe
     @Nullable
     private volatile ConfigurableConversionService conversionService;
 
-    //todo
+    @Nullable
+    private PropertyPlaceholderHelper nonStrictHelper;
+
+    @Nullable
+    private PropertyPlaceholderHelper strictHelper;
+
+    private boolean ignoreUnresolvableNestedPlaceholders = false;
+
+    private String placeholderPrefix = SystemPropertyUtils.PLACEHOLDER_PREFIX;
+
+    private String placeholderSuffix = SystemPropertyUtils.PLACEHOLDER_SUFFIX;
+
+    @Nullable
+    private String valueSeparator = SystemPropertyUtils.VALUE_SEPARATOR;
+
+    private final Set<String> requiredProperties = new LinkedHashSet<>();
 
     @Override
     public boolean containsProperty(String key) {

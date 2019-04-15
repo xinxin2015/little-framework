@@ -7,6 +7,7 @@ import org.apache.commons.logging.LogFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 public class PropertyPlaceholderHelper {
 
@@ -54,6 +55,11 @@ public class PropertyPlaceholderHelper {
 
     public String replacePlaceholders(String value, final Properties properties) {
         Assert.notNull(properties,"'properties' must not be null");
+
+    }
+
+    protected String parseStringValue(String value, PlaceholderResolver placeholderResolver,
+                                      Set<String> visitedPlaceholders) {
 
     }
 

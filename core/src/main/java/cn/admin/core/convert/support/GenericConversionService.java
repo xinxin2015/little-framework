@@ -6,6 +6,7 @@ import cn.admin.core.convert.converter.*;
 import cn.admin.lang.Nullable;
 import cn.admin.util.Assert;
 import cn.admin.util.ClassUtils;
+import cn.admin.util.ConcurrentReferenceHashMap;
 import cn.admin.util.StringUtils;
 
 import java.lang.reflect.Array;
@@ -17,7 +18,10 @@ public class GenericConversionService implements ConfigurableConversionService {
 
     private static final GenericConverter NO_MATCH = new NoOpConverter("NO_MATCH");
 
+    private final Converters converters = new Converters();
 
+    private final Map<ConverterCacheKey,GenericConverter> converterCache =
+            new ConcurrentReferenceHashMap<>(64);
 
     @Override
     public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
@@ -64,6 +68,88 @@ public class GenericConversionService implements ConfigurableConversionService {
 
     }
 
+    @Nullable
+    protected Object convertNullSource(@Nullable TypeDescriptor sourceType,
+                                       TypeDescriptor targetType) {
+        if (targetType.getObjectType() == Optional.class) {
+            return Optional.empty();
+        }
+        return null;
+    }
+
+    @Nullable
+    private ResolvableType[] getRequiredTypeInfo(Class<?> converterClass,Class<?> genericIfc) {
+        ResolvableType resolvableType = ResolvableType.forClass(converterClass).as(genericIfc);
+        ResolvableType[] generics = resolvableType.getGenerics();
+        if (generics.length < 2) {
+            return null;
+        }
+        Class<?> sourceType = generics[0].resolve();
+        Class<?> targetType = generics[1].resolve();
+        if (sourceType == null || targetType == null) {
+            return null;
+        }
+        return generics;
+    }
+
+    private void invalidateCache() {
+        this.converterCache.clear();
+    }
+
+    private void assertNotPrimitiveTargetType(@Nullable TypeDescriptor sourceType,
+                                              TypeDescriptor targetType) {
+        if (targetType.isPrimitive()) {
+            throw new ConversionFailedException(sourceType, targetType, null,
+                    new IllegalArgumentException("A null value cannot be assigned to a primitive type"));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private final class ConverterAdapter implements ConditionalGenericConverter {
+
+        private final Converter<Object,Object> converter;
+
+        private final ConvertiblePair typeInfo;
+
+        private final ResolvableType targetType;
+
+        private ConverterAdapter(Converter<?,?> converter,ResolvableType sourceType,
+                                 ResolvableType targetType) {
+            this.converter = (Converter<Object, Object>) converter;
+            this.typeInfo = new ConvertiblePair(sourceType.toClass(),targetType.toClass());
+            this.targetType = targetType;
+        }
+
+        @Override
+        public boolean matches(TypeDescriptor sourceType, TypeDescriptor targetType) {
+            // Check raw type first...
+            if (this.typeInfo.getTargetType() != targetType.getObjectType()) {
+                return false;
+            }
+            // Full check for complex generic type match required?
+            ResolvableType rt = targetType.getResolvableType();
+            if (!(rt.getType() instanceof Class) && !rt.isAssignableFrom(this.targetType) &&
+                    !this.targetType.hasUnresolvableGenerics()) {
+                return false;
+            }
+            return !(this.converter instanceof ConditionalConverter) ||
+                    ((ConditionalConverter) this.converter).matches(sourceType, targetType);
+        }
+
+        @Override
+        public Set<ConvertiblePair> getConvertibleTypes() {
+            return Collections.singleton(typeInfo);
+        }
+
+        @Override
+        public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
+            if (source == null) {
+                return convertNullSource(sourceType, targetType);
+            }
+            return this.converter.convert(source);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private final class ConverterFactoryAdapter implements ConditionalGenericConverter {
 
@@ -102,9 +188,14 @@ public class GenericConversionService implements ConfigurableConversionService {
         @Nullable
         public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
             if (source == null) {
-                return
+                return convertNullSource(sourceType,targetType);
             }
-            return null;
+            return this.converterFactory.getConverter(targetType.getType()).convert(source);
+        }
+
+        @Override
+        public String toString() {
+            return (this.typeInfo + " : " + this.converterFactory);
         }
     }
 

@@ -169,6 +169,43 @@ public class ResolvableType implements Serializable {
         return interfaces;
     }
 
+    boolean isEntirelyUnresolvable() {
+        if (this == NONE) {
+            return false;
+        }
+        ResolvableType[] generics = getGenerics();
+        for (ResolvableType generic : generics) {
+            if (!generic.isUnresolvableTypeVariable() && !generic.isWildcardWithoutBounds()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean hasUnresolvableGenerics() {
+        if (this == NONE) {
+            return false;
+        }
+        ResolvableType[] generics = getGenerics();
+        for (ResolvableType generic : generics) {
+            if (generic.isUnresolvableTypeVariable() || generic.isWildcardWithoutBounds()) {
+                return true;
+            }
+        }
+        Class<?> resolved = resolve();
+        if (resolved != null) {
+            for (Type genericInterface : resolved.getGenericInterfaces()) {
+                if (genericInterface instanceof Class) {
+                    if (forClass((Class<?>) genericInterface).hasGenerics()) {
+                        return true;
+                    }
+                }
+            }
+            return getSuperType().hasUnresolvableGenerics();
+        }
+        return false;
+    }
+
     private boolean isAssignableFrom(ResolvableType other, @Nullable Map<Type,Type> matchedBefore) {
         Assert.notNull(other, "ResolvableType must not be null");
 
@@ -483,6 +520,30 @@ public class ResolvableType implements Serializable {
                 forType(methodParameter.getContainingClass()).as(methodParameter.getDeclaringClass());
         methodParameter.setParameterType(
                 forType(null, new MethodParameterTypeProvider(methodParameter), owner.asVariableResolver()).resolve());
+    }
+
+    private boolean isUnresolvableTypeVariable() {
+        if (this.type instanceof TypeVariable) {
+            if (this.variableResolver == null) {
+                return true;
+            }
+            TypeVariable<?> variable = (TypeVariable<?>) this.type;
+            ResolvableType resolved = this.variableResolver.resolveVariable(variable);
+            return resolved == null || resolved.isUnresolvableTypeVariable();
+        }
+
+        return false;
+    }
+
+    private boolean isWildcardWithoutBounds() {
+        if (this.type instanceof WildcardType) {
+            WildcardType wt = (WildcardType) this.type;
+            if (wt.getLowerBounds().length == 0) {
+                Type[] upperBounds = wt.getUpperBounds();
+                return upperBounds.length == 0 || (upperBounds.length == 1 && Object.class == upperBounds[0]);
+            }
+        }
+        return false;
     }
 
     public ResolvableType getNested(int nestingLevel) {

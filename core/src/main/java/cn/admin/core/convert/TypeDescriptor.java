@@ -156,6 +156,19 @@ public class TypeDescriptor implements Serializable {
         return getType().isArray();
     }
 
+    @Nullable
+    public static TypeDescriptor forObject(@Nullable Object source) {
+        return source != null ? valueOf(source.getClass()) : null;
+    }
+
+    public static TypeDescriptor valueOf(@Nullable Class<?> type) {
+        if (type == null) {
+            type = Object.class;
+        }
+        TypeDescriptor desc = commonTypesCache.get(type);
+        return desc != null ? desc : new TypeDescriptor(ResolvableType.forClass(type),null,null);
+    }
+
     private class AnnotatedElementAdapter implements AnnotatedElement,Serializable {
 
         @Nullable

@@ -1,6 +1,8 @@
 package cn.admin.core.convert.support;
 
+import cn.admin.core.DecoratingProxy;
 import cn.admin.core.ResolvableType;
+import cn.admin.core.convert.ConverterNotFoundException;
 import cn.admin.core.convert.TypeDescriptor;
 import cn.admin.core.convert.converter.*;
 import cn.admin.lang.Nullable;
@@ -25,47 +27,112 @@ public class GenericConversionService implements ConfigurableConversionService {
 
     @Override
     public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
-        return false;
+        Assert.notNull(targetType,"Target type must not be null");
+        return canConvert(sourceType != null ? TypeDescriptor.valueOf(sourceType) : null,
+                TypeDescriptor.valueOf(targetType));
     }
 
     @Override
     public boolean canConvert(TypeDescriptor sourceType, TypeDescriptor targetType) {
-        return false;
+        Assert.notNull(targetType,"Target type to convert to cannot be null");
+        if (sourceType == null) {
+            return false;
+        }
+        GenericConverter converter = getConverter(sourceType,targetType);
+        return converter != null;
+    }
+
+    public boolean canBypassConvert(@Nullable TypeDescriptor sourceType, TypeDescriptor targetType) {
+        Assert.notNull(targetType, "Target type to convert to cannot be null");
+        if (sourceType == null) {
+            return true;
+        }
+        GenericConverter converter = getConverter(sourceType, targetType);
+        return (converter == NO_OP_CONVERTER);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    @Nullable
     public <T> T convert(Object source, Class<T> targetType) {
-        return null;
+        Assert.notNull(targetType, "Target type to convert to cannot be null");
+        return (T) convert(source, TypeDescriptor.forObject(source), TypeDescriptor.valueOf(targetType));
     }
 
     @Override
     public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
-        return null;
+        Assert.notNull(targetType,"Target type to convert to cannot be null");
+        if (sourceType == null) {
+            Assert.isTrue(source == null,"Source must be [null] if source type == [null]");
+            return handleResult(null,targetType,convertNullSource(null,targetType));
+        }
+        if (source != null && !sourceType.getObjectType().isInstance(source)) {
+            throw new IllegalArgumentException("Source to convert from must be an instance of [" +
+                    sourceType + "]; instead it was a [" + source.getClass().getName() + "]");
+        }
+        GenericConverter converter = getConverter(sourceType,targetType);
+        if (converter != null) {
+            Object result = ConversionUtils.invokeConverter(converter,source,sourceType,targetType);
+            return handleResult(sourceType,targetType,result);
+        }
+        return handleConverterNotFound(source,sourceType,targetType);
+    }
+
+    @Nullable
+    public Object convert(@Nullable Object source,TypeDescriptor targetType) {
+        return convert(source,TypeDescriptor.forObject(source),targetType);
+    }
+
+    @Override
+    public String toString() {
+        return this.converters.toString();
     }
 
     @Override
     public void addConverted(Converter<?, ?> converter) {
-
+        ResolvableType[] typeInfo = getRequiredTypeInfo(converter.getClass(),Converter.class);
+        if (typeInfo == null && converter instanceof DecoratingProxy) {
+            typeInfo = getRequiredTypeInfo(((DecoratingProxy) converter).getDecoratedClass(),
+                    Converter.class);
+        }
+        if (typeInfo == null) {
+            throw new IllegalArgumentException("Unable to determine source type <S> and target type <T> for your " +
+                    "Converter [" + converter.getClass().getName() + "]; does the class parameterize those types?");
+        }
+        addConverter(new ConverterAdapter(converter,typeInfo[0],typeInfo[1]));
     }
 
     @Override
     public <S, T> void addConverter(Class<S> sourceType, Class<T> targetType, Converter<? super S, ? extends T> converter) {
-
+        addConverter(new ConverterAdapter(converter,ResolvableType.forClass(sourceType),
+                ResolvableType.forClass(targetType)));
     }
 
     @Override
     public void addConverter(GenericConverter converter) {
-
+        this.converters.add(converter);
+        this.invalidateCache();
     }
 
     @Override
     public void addConverterFactory(ConverterFactory<?, ?> factory) {
-
+        ResolvableType[] typeInfo = getRequiredTypeInfo(factory.getClass(),ConverterFactory.class);
+        if (typeInfo == null && factory instanceof DecoratingProxy) {
+            typeInfo = getRequiredTypeInfo(((DecoratingProxy) factory).getDecoratedClass(),
+                    ConverterFactory.class);
+        }
+        if (typeInfo == null) {
+            throw new IllegalArgumentException("Unable to determine source type <S> and target type <T> for your " +
+                    "ConverterFactory [" + factory.getClass().getName() + "]; does the class parameterize those types?");
+        }
+        addConverter(new ConverterFactoryAdapter(factory,
+                new GenericConverter.ConvertiblePair(typeInfo[0].toClass(), typeInfo[1].toClass())));
     }
 
     @Override
     public void removeConvertible(Class<?> sourceType, Class<?> targetType) {
-
+        this.converters.remove(sourceType,targetType);
+        this.invalidateCache();
     }
 
     @Nullable
@@ -75,6 +142,34 @@ public class GenericConversionService implements ConfigurableConversionService {
             return Optional.empty();
         }
         return null;
+    }
+
+    @Nullable
+    protected GenericConverter getConverter(TypeDescriptor sourceType,TypeDescriptor targetType) {
+        ConverterCacheKey key = new ConverterCacheKey(sourceType,targetType);
+        GenericConverter converter = this.converterCache.get(key);
+        if (converter != null) {
+            return converter != NO_MATCH ? converter : null;
+        }
+
+        converter = this.converters.find(sourceType,targetType);
+        if (converter == null) {
+            converter = getDefaultConverter(sourceType,targetType);
+        }
+
+        if (converter != null) {
+            this.converterCache.put(key,converter);
+            return converter;
+        }
+
+        this.converterCache.put(key,NO_MATCH);
+        return null;
+    }
+
+    @Nullable
+    protected GenericConverter getDefaultConverter(TypeDescriptor sourceType,
+                                                   TypeDescriptor targetType) {
+        return sourceType.isAssignableTo(targetType) ? NO_OP_CONVERTER : null;
     }
 
     @Nullable
@@ -94,6 +189,29 @@ public class GenericConversionService implements ConfigurableConversionService {
 
     private void invalidateCache() {
         this.converterCache.clear();
+    }
+
+    @Nullable
+    private Object handleConverterNotFound(@Nullable Object source,
+                                           @Nullable TypeDescriptor sourceType,
+                                           TypeDescriptor targetType) {
+        if (source == null) {
+            assertNotPrimitiveTargetType(sourceType,targetType);
+            return null;
+        }
+        if ((sourceType == null || sourceType.isAssignableTo(targetType)) && targetType.getObjectType().isInstance(source)) {
+            return source;
+        }
+        throw new ConverterNotFoundException(sourceType, targetType);
+    }
+
+    @Nullable
+    private Object handleResult(@Nullable TypeDescriptor sourceType,TypeDescriptor targetType,
+                                @Nullable Object result) {
+        if (result == null) {
+            assertNotPrimitiveTargetType(sourceType,targetType);
+        }
+        return result;
     }
 
     private void assertNotPrimitiveTargetType(@Nullable TypeDescriptor sourceType,

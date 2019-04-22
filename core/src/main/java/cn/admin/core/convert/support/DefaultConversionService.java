@@ -28,6 +28,9 @@ public class DefaultConversionService extends GenericConversionService {
     }
 
     public static void addDefaultConverters(ConverterRegistry converterRegistry) {
+        addScalarConverters(converterRegistry);
+        addCollectionConverters(converterRegistry);
+        converterRegistry.addConverter(new ByteBufferConverter((ConversionService) converterRegistry));
         //TODO
     }
 

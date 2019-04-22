@@ -134,11 +134,7 @@ public class TypeDescriptor implements Serializable {
         if (!typeAssignable) {
             return false;
         }
-        if (isArray() && typeDescriptor.isArray()) {
-            return false;
-        } else {
-            return true;
-        }
+        return !isArray() || !typeDescriptor.isArray();
     }
 
     private boolean isNestedAssignable(@Nullable TypeDescriptor nestedTypeDescriptor,

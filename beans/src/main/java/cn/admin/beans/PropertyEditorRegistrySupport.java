@@ -7,6 +7,7 @@ import cn.admin.util.ClassUtils;
 import java.beans.PropertyEditor;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class PropertyEditorRegistrySupport implements PropertyEditorRegistry {
@@ -16,7 +17,7 @@ public class PropertyEditorRegistrySupport implements PropertyEditorRegistry {
 
     private boolean defaultEditorsActive = false;
 
-    private boolean configValueEditorActive = false;
+    private boolean configValueEditorsActive = false;
 
     @Nullable
     private Map<Class<?>,PropertyEditor> defaultEditors;
@@ -47,7 +48,7 @@ public class PropertyEditorRegistrySupport implements PropertyEditorRegistry {
     }
 
     public void useConfigValueEditors() {
-        this.configValueEditorActive = true;
+        this.configValueEditorsActive = true;
     }
 
     public void overrideDefaultEditor(Class<?> requiredType,PropertyEditor propertyEditor) {
@@ -76,17 +77,40 @@ public class PropertyEditorRegistrySupport implements PropertyEditorRegistry {
 
     private void createDefaultEditors() {
         this.defaultEditors = new HashMap<>(64);
+        //TODO
+    }
+
+    protected void copyDefaultEditorsTo(PropertyEditorRegistrySupport target) {
+        target.defaultEditorsActive = this.defaultEditorsActive;
+        target.configValueEditorsActive = this.configValueEditorsActive;
+        target.defaultEditors = this.defaultEditors;
+        target.overriddenDefaultEditors = this.overriddenDefaultEditors;
     }
 
     @Override
     public void registerCustomEditor(Class<?> requiredType, PropertyEditor propertyEditor) {
-
+        registerCustomEditor(requiredType,null,propertyEditor);
     }
 
     @Override
     public void registerCustomEditor(Class<?> requiredType, String propertyPath,
                                      PropertyEditor propertyEditor) {
-
+        if (requiredType == null && propertyPath == null) {
+            throw new IllegalArgumentException("Either requiredType or propertyPath is required");
+        }
+        if (propertyPath != null) {
+            if (this.customEditorsForPath == null) {
+                this.customEditorsForPath = new LinkedHashMap<>(16);
+            }
+            this.customEditorsForPath.put(propertyPath, new CustomEditorHolder(propertyEditor, requiredType));
+        }
+        else {
+            if (this.customEditors == null) {
+                this.customEditors = new LinkedHashMap<>(16);
+            }
+            this.customEditors.put(requiredType, propertyEditor);
+            this.customEditorCache = null;
+        }
     }
 
     @Override
